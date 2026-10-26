@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Shagun Register",
+    "slug": "shagun-register",
+    "scheme": "shagun",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.shagunregister.app"
+    },
+    "android": {
+      "package": "com.shagunregister.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#7A1C2E",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}

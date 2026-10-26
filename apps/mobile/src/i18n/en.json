@@ -1,0 +1,223 @@
+{
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "seeAll": "See all",
+    "optional": "(optional)",
+    "loading": "Opening your ledger…",
+    "dbError": "The ledger could not be opened. Close the app and open it again."
+  },
+  "tabs": {
+    "home": "Home",
+    "events": "Events",
+    "people": "People",
+    "more": "More"
+  },
+  "sync": {
+    "allSaved": "All saved",
+    "pendingShort": "{{count}} to sync",
+    "pendingLong_one": "{{count}} change saved on this phone, waiting to sync",
+    "pendingLong_other": "{{count}} changes saved on this phone, waiting to sync",
+    "synced": "Synced",
+    "pending": "Pending",
+    "line": "{{synced}} synced · {{pending}} waiting"
+  },
+  "direction": {
+    "received": "Received",
+    "given": "Given",
+    "receivedShort": "received",
+    "givenShort": "given",
+    "theyGave": "they gave",
+    "youGave": "you gave"
+  },
+  "mode": {
+    "cash": "Cash",
+    "upi": "UPI",
+    "cheque": "Cheque",
+    "item": "Item"
+  },
+  "eventType": {
+    "wedding": "Wedding",
+    "griha_pravesh": "Griha pravesh",
+    "birthday": "Birthday",
+    "mundan": "Mundan",
+    "other": "Other"
+  },
+  "eventRole": {
+    "hosted": "Hosted",
+    "attended": "Attended"
+  },
+  "subFunction": {
+    "haldi": "Haldi",
+    "mehendi": "Mehendi",
+    "sangeet": "Sangeet",
+    "wedding": "Wedding",
+    "reception": "Reception"
+  },
+  "relation": {
+    "relative": "Relative",
+    "neighbour": "Neighbour",
+    "friend": "Friend",
+    "colleague": "Colleague",
+    "mama_ji": "Mama ji",
+    "chacha_ji": "Chacha ji",
+    "bua_ji": "Bua ji",
+    "mausi_ji": "Mausi ji"
+  },
+  "setup": {
+    "greeting": "Namaste",
+    "title": "Set up your family ledger",
+    "body": "One ledger per family. Every gift you give and receive goes into the same register.",
+    "nameLabel": "Ledger name",
+    "namePlaceholder": "e.g. Dubey parivaar",
+    "nameHint": "You can rename it later.",
+    "create": "Create ledger",
+    "localNote": "Everything is saved on this phone and works without signal. Signing in and sharing the ledger with family come in the next build."
+  },
+  "home": {
+    "search": "Search people or events",
+    "scanInvite": "Scan invite card",
+    "newEvent": "New event",
+    "upcoming": "Upcoming",
+    "recent": "Recent events",
+    "emptyTitle": "Start with an event",
+    "emptyBody": "Create your own function to log gifts you receive, or another family's function to log what you gave.",
+    "noResults": "Nothing matches “{{query}}”",
+    "people": "People",
+    "events": "Events",
+    "historyWith": "See history with {{name}}",
+    "last": "Last: {{who}} {{amount}} · {{date}}"
+  },
+  "events": {
+    "title": "Events",
+    "show": "Show events",
+    "all": "All",
+    "received": "Received",
+    "given": "Given",
+    "entries_one": "{{count}} entry",
+    "entries_other": "{{count}} entries",
+    "nothingLogged": "Nothing logged yet",
+    "upcoming": "Upcoming",
+    "today": "Today",
+    "emptyTitle": "No events yet",
+    "emptyBody": "Create an event for your own function, or for one you're attending."
+  },
+  "createEvent": {
+    "title": "New event",
+    "nameLabel": "Event name",
+    "namePlaceholder": "e.g. Ananya's Wedding",
+    "type": "Type",
+    "whose": "Whose function?",
+    "ours": "Ours",
+    "oursHint": "We're hosting · gifts received",
+    "theirs": "Another family",
+    "theirsHint": "We're attending · gifts given",
+    "host": "Host family",
+    "hostPlaceholder": "e.g. Verma parivaar",
+    "date": "Date",
+    "venue": "Venue",
+    "venuePlaceholder": "e.g. Bhopal",
+    "functions": "Functions",
+    "functionsHint": "gifts can be logged against each",
+    "addFunction": "Add function",
+    "newFunction": "New function name",
+    "addIt": "Add",
+    "create": "Create event",
+    "scanCard": "Scan card"
+  },
+  "eventDetail": {
+    "totalReceived": "Total received",
+    "totalGiven": "Total given",
+    "logGift": "Log a gift",
+    "logGiven": "Log what you gave",
+    "countCash": "Count cash",
+    "functions": "Functions",
+    "all": "All",
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items",
+    "modeCount": "{{mode}} · {{count}}",
+    "emptyTitle": "No gifts logged yet",
+    "emptyBody": "Everything saves on this phone, even without signal.",
+    "deleteTitle": "Delete this entry?",
+    "deleteBody": "{{name}} · {{amount}}",
+    "notFound": "This event is no longer in the ledger.",
+    "entryActions": "Long press an entry to delete it"
+  },
+  "quickEntry": {
+    "from": "From",
+    "to": "To",
+    "nameLabel": "Name",
+    "namePlaceholder": "Type a name",
+    "addNew": "Add “{{name}}” as a new person",
+    "newPerson": "New person",
+    "clearPerson": "Change person",
+    "last": "Last: {{who}} {{amount}} · {{event}}",
+    "noHistory": "No past exchanges",
+    "amount": "Amount",
+    "amountA11y": "Amount, {{amount}} rupees",
+    "relation": "Relation",
+    "function": "Function",
+    "mode": "Mode",
+    "direction": "Direction",
+    "itemLabel": "What was the gift?",
+    "itemPlaceholder": "e.g. Silver dinner set",
+    "itemValue": "Approximate value",
+    "note": "Note",
+    "addNote": "Add note",
+    "notePlaceholder": "Anything to remember",
+    "save": "Save",
+    "saveNext": "Save and next",
+    "savedCount": "{{count}} saved",
+    "toast": "Saved · {{name}} {{amount}}",
+    "toastItem": "Saved · {{name}} · item",
+    "keyDelete": "Delete digit",
+    "amountChips": "Common amounts"
+  },
+  "people": {
+    "title": "People",
+    "count_one": "{{count}} in ledger",
+    "count_other": "{{count}} in ledger",
+    "search": "Search people",
+    "legend": "↗ given by you · ↙ received from them",
+    "emptyTitle": "No people yet",
+    "emptyBody": "People are added when you log a gift or create an event for another family."
+  },
+  "person": {
+    "youGave": "↗ You gave · {{count}}",
+    "theyGave": "↙ They gave · {{count}}",
+    "since_one": "{{count}} exchange since {{year}}",
+    "since_other": "{{count}} exchanges since {{year}}",
+    "ourFunction": "Our function",
+    "theirFunction": "Their function",
+    "emptyTitle": "No exchanges yet",
+    "notFound": "This person is no longer in the ledger."
+  },
+  "more": {
+    "title": "More",
+    "ledger": "Family ledger",
+    "onPhone": "Saved on this phone",
+    "comingNext": "Coming in later builds",
+    "comingNextBody": "Sign-in and family members, sync across phones, duplicate merging, invite-card scanning, PDF and Excel export, Hindi, and app lock.",
+    "version": "Version {{version}}"
+  },
+  "later": {
+    "title": "Not built yet",
+    "scan": "Scanning invite cards arrives in week 5. For now, create the event by typing it in.",
+    "cash": "Cash reconciliation arrives in week 2.",
+    "typeInstead": "Create event instead"
+  },
+  "errors": {
+    "amount": "Enter an amount",
+    "newPersonName": "Pick a person or type a new name",
+    "personId": "That person is no longer in the ledger",
+    "itemNote": "Describe the item",
+    "title": "Give the event a name",
+    "hostName": "Whose function is it?",
+    "eventId": "This event is no longer in the ledger",
+    "name": "Give the ledger a name",
+    "pickPerson": "More than one person has this name. Pick one from the list.",
+    "generic": "That didn't save. Check the form and try again."
+  }
+}

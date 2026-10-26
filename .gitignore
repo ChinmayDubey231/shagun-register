@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+apps/mobile/android/
+apps/mobile/ios/
+coverage/
+*.log
