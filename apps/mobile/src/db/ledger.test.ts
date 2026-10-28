@@ -9,10 +9,22 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { sumAmounts } from '@shagun/shared';
+import { matchKey, sumAmounts } from '@shagun/shared';
+import { eq } from 'drizzle-orm';
 import {
+  addCashCount,
   addEntry,
   countPendingChanges,
+  findSameName,
+  getCashCounts,
+  getCashEntries,
+  getCashSummary,
+  getPeopleIndex,
+  getUpcomingForPerson,
+  refreshMatchKeys,
+  getEntry,
+  updateEntry,
+  updatePerson,
   createEvent,
   createLocalFamily,
   deleteEntry,
@@ -217,12 +229,15 @@ describe('giving mode and people', () => {
     addEntry(ctx, gift(event.id, { newPersonName: 'रमेश शर्मा', amount: 1100 }));
     addEntry(ctx, gift(event.id, { newPersonName: 'Sunita Mishra' }));
 
+    // Since week 2, both spellings of the same name match from either script.
     const hits = searchPeople(db, ctx.familyId, 'RAME');
-    expect(hits.map((h) => h.displayName)).toEqual(['Ramesh Sharma']);
-    expect(hits[0]!.lastAmount).toBe(2100);
-    expect(hits[0]!.lastDirection).toBe('received');
+    expect(hits.map((h) => h.displayName).sort()).toEqual(['Ramesh Sharma', 'रमेश शर्मा'].sort());
+    const english = hits.find((h) => h.displayName === 'Ramesh Sharma')!;
+    expect(english.lastAmount).toBe(2100);
+    expect(english.lastDirection).toBe('received');
 
-    expect(searchPeople(db, ctx.familyId, 'रमेश').map((h) => h.displayName)).toEqual(['रमेश शर्मा']);
+    expect(searchPeople(db, ctx.familyId, 'रमेश').map((h) => h.displayName).sort()).toEqual(['Ramesh Sharma', 'रमेश शर्मा'].sort());
+    expect(searchPeople(db, ctx.familyId, 'Sunita')[0]!.displayName).toBe('Sunita Mishra');
     expect(searchPeople(db, ctx.familyId, '100%')).toEqual([]);
     expect(searchPeople(db, ctx.familyId, '  ')).toEqual([]);
   });
@@ -245,5 +260,104 @@ describe('deletes', () => {
     const deletes = outboxRows().filter((r) => r.op === 'delete');
     expect(deletes).toHaveLength(1);
     expect(deletes[0]!.recordId).toBe(a.entry.id);
+  });
+});
+
+describe('Week 2: Hindi and English names', () => {
+  it('stores the match key and finds people across scripts and spellings', () => {
+    const event = hostedWedding();
+    addEntry(ctx, gift(event.id, { newPersonName: 'Shri Ramesh Sharma ji', newPersonCity: 'Indore', amount: 2100 }));
+    addEntry(ctx, gift(event.id, { newPersonName: 'कमला बुआ', amount: 5100 }));
+    addEntry(ctx, gift(event.id, { newPersonName: 'Sunita Mishra', amount: 1100 }));
+
+    const ramesh = searchPeople(db, ctx.familyId, 'रमेश शर्मा')[0]!;
+    expect(ramesh.displayName).toBe('Shri Ramesh Sharma ji');
+    expect(ramesh.nameLatin).toBe('ramesh sharm');
+    expect(ramesh.city).toBe('Indore');
+    expect(ramesh.lastAmount).toBe(2100);
+    expect(searchPeople(db, ctx.familyId, 'Kamla')[0]!.displayName).toBe('कमला बुआ');
+    expect(searchPeople(db, ctx.familyId, 'sunitaa mishra')[0]!.displayName).toBe('Sunita Mishra');
+    expect(findSameName(db, ctx.familyId, 'Ramesh Sharmaa').map((p) => p.id)).toEqual([ramesh.id]);
+  });
+
+  it('re-keys people stored with an older match key, once, without queuing sync changes', () => {
+    const event = hostedWedding();
+    const { person } = addEntry(ctx, gift(event.id, { newPersonName: 'रमेश शर्मा' }));
+    db.update(schema.people).set({ nameLatin: 'रमेश शर्मा' }).where(eq(schema.people.id, person.id)).run();
+    db.delete(schema.appSettings).where(eq(schema.appSettings.key, 'matchKeyVersion')).run();
+    const before = outboxRows().length;
+
+    expect(refreshMatchKeys(db)).toBe(1);
+    expect(refreshMatchKeys(db)).toBe(0);
+    expect(getPeopleIndex(db, ctx.familyId)[0]!.nameLatin).toBe(matchKey('Ramesh Sharma'));
+    expect(outboxRows().length).toBe(before);
+  });
+
+  it('edits a person, recomputes the key and queues the change', () => {
+    const event = hostedWedding();
+    const { person } = addEntry(ctx, gift(event.id, { newPersonName: 'Ramesh' }));
+    const edited = updatePerson(ctx, person.id, { displayName: 'Ramesh Sharma', relation: 'mama_ji', city: 'Indore', phone: null });
+    expect(edited.nameLatin).toBe('ramesh sharm');
+    expect(searchPeople(db, ctx.familyId, 'sharma')[0]!.city).toBe('Indore');
+    expect(JSON.parse(outboxRows().at(-1)!.payload).displayName).toBe('Ramesh Sharma');
+    expect(() => updatePerson(ctx, person.id, { displayName: ' ', relation: null, city: null, phone: null })).toThrow('Enter a name');
+  });
+
+  it('lists upcoming functions hosted by a person', () => {
+    const upcoming = createEvent(ctx, {
+      title: 'Sakshi weds Rohit', type: 'wedding', role: 'attended', hostPersonId: null,
+      hostName: 'Verma parivaar', date: '2026-12-12', subFunctions: [], venue: null,
+    });
+    createEvent(ctx, {
+      title: 'Old griha pravesh', type: 'griha_pravesh', role: 'attended', hostPersonId: upcoming.hostPersonId,
+      hostName: null, date: '2024-01-23', subFunctions: [], venue: null,
+    });
+    const list = getUpcomingForPerson(db, ctx.familyId, upcoming.hostPersonId!, '2026-10-29');
+    expect(list.map((e) => e.title)).toEqual(['Sakshi weds Rohit']);
+  });
+});
+
+describe('Week 2: cash reconciliation', () => {
+  it('compares counted cash with logged cash and keeps every count', () => {
+    const event = hostedWedding();
+    addEntry(ctx, gift(event.id, { newPersonName: 'A', amount: 11000 }));
+    addEntry(ctx, gift(event.id, { newPersonName: 'B', amount: 2100 }));
+    addEntry(ctx, gift(event.id, { newPersonName: 'C', amount: 501, mode: 'upi' }));
+    addEntry(ctx, gift(event.id, { newPersonName: 'D', amount: 0, mode: 'item', itemNote: 'Silver set' }));
+    const d = addEntry(ctx, gift(event.id, { newPersonName: 'E', amount: 5100 }));
+    deleteEntry(ctx, d.entry.id);
+
+    expect(getCashSummary(db, event.id)).toEqual({ loggedCash: 13100, cashEntries: 2 });
+    expect(getCashEntries(db, event.id).map((e) => e.amount)).toEqual([11000, 2100]);
+
+    addCashCount(ctx, { eventId: event.id, countedAmount: 11000 });
+    addCashCount(ctx, { eventId: event.id, countedAmount: 13100 });
+    const counts = getCashCounts(db, event.id);
+    expect(counts.map((c) => c.countedAmount)).toEqual([13100, 11000]);
+    expect(outboxRows().filter((r) => r.tableName === 'cashCounts')).toHaveLength(2);
+    expect(() => addCashCount(ctx, { eventId: event.id, countedAmount: 10.5 })).toThrow(LedgerError);
+  });
+});
+
+describe('Week 2: fixing an entry', () => {
+  it('updates amount, mode and person in place and queues the change', () => {
+    const event = hostedWedding();
+    const { entry, person } = addEntry(ctx, gift(event.id, { newPersonName: 'Anil Khare', amount: 2100 }));
+    const before = getEntry(db, ctx.familyId, entry.id)!;
+    updateEntry(ctx, entry.id, gift(event.id, { personId: person.id, amount: 1100, mode: 'upi', note: 'typo fixed' }));
+
+    const after = getEntry(db, ctx.familyId, entry.id)!;
+    expect(after.amount).toBe(1100);
+    expect(after.mode).toBe('upi');
+    expect(after.createdAt).toBe(before.createdAt);
+    expect(after.updatedAt).toBeGreaterThan(before.updatedAt);
+    expect(getEventSummary(db, ctx.familyId, event.id)!.received).toBe(1100);
+    expect(getEventSummary(db, ctx.familyId, event.id)!.entryCount).toBe(1);
+    const changes = outboxRows().filter((r) => r.recordId === entry.id);
+    expect(changes).toHaveLength(2);
+    expect(JSON.parse(changes[1]!.payload).amount).toBe(1100);
+
+    deleteEntry(ctx, entry.id);
+    expect(() => updateEntry(ctx, entry.id, gift(event.id, { personId: person.id }))).toThrow('no longer in the ledger');
   });
 });

@@ -1,11 +1,12 @@
 import { Feather } from '@expo/vector-icons';
-import { formatINR, simpleNameKey } from '@shagun/shared';
+import { createPersonSearch, formatINR, RELATION_PRESETS } from '@shagun/shared';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
+import { Chip, ChipRow } from '@/components/Choice';
 import { EmptyState } from '@/components/layout';
 import { Avatar } from '@/components/ledger';
 import { getDb } from '@/db/client';
@@ -19,12 +20,21 @@ export default function PeopleScreen() {
   const router = useRouter();
   const familyId = useFamilyId();
   const [query, setQuery] = useState('');
+  const [relation, setRelation] = useState<string | null>(null);
   const people = useDbQuery(() => getPeopleSummaries(getDb(), familyId), ['people', 'entries'], [familyId]);
+  const search = useMemo(() => createPersonSearch(people), [people]);
+
+  // Relation filters: the presets in use first, then any custom relations people have.
+  const relations = useMemo(() => {
+    const used = new Set(people.map((p) => p.relation).filter((r): r is string => !!r));
+    const presets: string[] = RELATION_PRESETS.filter((r) => used.has(r));
+    return [...presets, ...[...used].filter((r) => !presets.includes(r)).sort()];
+  }, [people]);
 
   const shown = useMemo(() => {
-    const key = simpleNameKey(query);
-    return key ? people.filter((p) => p.nameLatin.includes(key) || simpleNameKey(p.displayName).includes(key)) : people;
-  }, [people, query]);
+    const base = query.trim() ? search(query, 50) : people;
+    return relation ? base.filter((p) => p.relation === relation) : base;
+  }, [people, search, query, relation]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
@@ -48,6 +58,19 @@ export default function PeopleScreen() {
             style={styles.searchInput}
           />
         </View>
+        {relations.length > 0 ? (
+          <ChipRow>
+            <Chip label={t('events.all')} selected={relation === null} onPress={() => setRelation(null)} />
+            {relations.map((r) => (
+              <Chip
+                key={r}
+                label={t(`relation.${r}` as 'relation.friend', { defaultValue: r })}
+                selected={relation === r}
+                onPress={() => setRelation(relation === r ? null : r)}
+              />
+            ))}
+          </ChipRow>
+        ) : null}
       </View>
       <FlatList
         style={{ backgroundColor: colors.ground }}

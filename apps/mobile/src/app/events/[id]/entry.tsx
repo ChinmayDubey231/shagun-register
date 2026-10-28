@@ -5,13 +5,14 @@ import {
   formatINR,
   groupINR,
   pressAmountKey,
+  createPersonSearch,
+  exactKeyMatches,
   RELATION_PRESETS,
-  simpleNameKey,
   type Direction,
   type PaymentMode,
 } from '@shagun/shared';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View, type TextInputInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,26 +26,31 @@ import { Avatar } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import {
   addEntry,
+  getEntry,
   getEventSummary,
   getLastExchange,
+  getPeopleIndex,
   getPerson,
   LedgerError,
-  searchPeople,
+  updateEntry,
   type PersonMatch,
 } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
 import { errorMessage } from '@/i18n';
+import { contactsAlreadyAllowed, loadContacts, type PhoneContact } from '@/lib/contacts';
 import { useKeyboardVisible } from '@/lib/useKeyboardVisible';
 import { useLedgerContext, useSession } from '@/store/session';
 import { colors, directionColors, fonts, radius, space } from '@/theme';
 
-type Who = { kind: 'existing'; person: PersonMatch } | { kind: 'new'; name: string } | null;
+type Who = { kind: 'existing'; person: PersonMatch } | { kind: 'new'; name: string; phone?: string | null } | null;
 
 export default function QuickEntryScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { id: eventId } = useLocalSearchParams<{ id: string }>();
+  const { id: eventId, entryId } = useLocalSearchParams<{ id: string; entryId?: string }>();
   const ctx = useLedgerContext();
+  /** Set when fixing an existing entry instead of logging a new one. */
+  const [editing] = useState(() => (entryId ? getEntry(getDb(), ctx.familyId, entryId) : undefined));
   const event = useDbQuery(() => getEventSummary(getDb(), ctx.familyId, eventId), ['events'], [eventId, ctx.familyId]);
   const lastFn = useSession((s) => s.lastSubFunction[eventId]);
   const rememberFn = useSession((s) => s.rememberSubFunction);
@@ -52,25 +58,33 @@ export default function QuickEntryScreen() {
   const insets = useSafeAreaInsets();
   const nameRef = useRef<TextInputInstance>(null);
 
-  const [direction, setDirection] = useState<Direction>(event?.role === 'attended' ? 'given' : 'received');
+  const [direction, setDirection] = useState<Direction>(
+    editing?.direction ?? (event?.role === 'attended' ? 'given' : 'received'),
+  );
   const [who, setWho] = useState<Who>(null);
   const [nameText, setNameText] = useState('');
   const [relation, setRelation] = useState<string | null>(null);
-  const [subFunction, setSubFunction] = useState<string | null>(lastFn ?? event?.subFunctions[0] ?? null);
-  const [digits, setDigits] = useState('');
-  const [mode, setMode] = useState<PaymentMode>('cash');
-  const [itemNote, setItemNote] = useState('');
-  const [note, setNote] = useState('');
-  const [showNote, setShowNote] = useState(false);
+  const [subFunction, setSubFunction] = useState<string | null>(
+    editing ? editing.subFunction : (lastFn ?? event?.subFunctions[0] ?? null),
+  );
+  const [digits, setDigits] = useState(editing && editing.amount > 0 ? String(editing.amount) : '');
+  const [mode, setMode] = useState<PaymentMode>(editing?.mode ?? 'cash');
+  const [itemNote, setItemNote] = useState(editing?.itemNote ?? '');
+  const [note, setNote] = useState(editing?.note ?? '');
+  const [showNote, setShowNote] = useState(!!editing?.note);
   const [error, setError] = useState<{ field: string; message: string } | null>(null);
   const [saved, setSaved] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [newCity, setNewCity] = useState('');
+  /** null = not asked yet; 'denied' = no permission; otherwise the phone's contacts (memory only). */
+  const [contacts, setContacts] = useState<PhoneContact[] | 'denied' | null>(null);
 
-  // For another family's function, start with the host already picked.
+  // Editing: start with the entry's person. Another family's function: start with the host.
   useEffect(() => {
-    if (event?.role === 'attended' && event.hostPersonId) {
-      const host = getPerson(getDb(), ctx.familyId, event.hostPersonId);
-      if (host) pickPerson({ ...host, lastAmount: null, lastDirection: null });
+    const startId = editing ? editing.personId : event?.role === 'attended' ? event.hostPersonId : null;
+    if (startId) {
+      const person = getPerson(getDb(), ctx.familyId, startId);
+      if (person) pickPerson({ ...person, lastAmount: null, lastDirection: null });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event?.id]);
@@ -81,11 +95,21 @@ export default function QuickEntryScreen() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const suggestions = useDbQuery(
-    () => (who === null && nameText.trim() ? searchPeople(getDb(), ctx.familyId, nameText, 5) : []),
-    ['people'],
-    [who, nameText, ctx.familyId],
-  );
+  // If contacts were allowed earlier, load them quietly; otherwise wait for the user to ask.
+  useEffect(() => {
+    void contactsAlreadyAllowed().then((ok) => (ok ? loadContacts().then(setContacts) : undefined));
+  }, []);
+
+  const peopleIndex = useDbQuery(() => getPeopleIndex(getDb(), ctx.familyId), ['people', 'entries'], [ctx.familyId]);
+  const search = useMemo(() => createPersonSearch(peopleIndex), [peopleIndex]);
+  const contactSearch = useMemo(() => (Array.isArray(contacts) ? createPersonSearch(contacts) : null), [contacts]);
+  const query = who === null ? nameText.trim() : '';
+  const suggestions = useMemo(() => (query ? search(query, 5) : []), [search, query]);
+  const contactHits = useMemo(() => {
+    if (!query || !contactSearch) return [];
+    const known = new Set(suggestions.map((p) => p.nameLatin));
+    return contactSearch(query, 3).filter((c) => !known.has(c.nameLatin));
+  }, [contactSearch, query, suggestions]);
   const last = useDbQuery(
     () => (who?.kind === 'existing' ? getLastExchange(getDb(), who.person.id) : undefined),
     ['entries'],
@@ -111,8 +135,13 @@ export default function QuickEntryScreen() {
     Keyboard.dismiss();
   }
 
+  const askContacts = async () => {
+    setContacts(await loadContacts());
+  };
+
   const clearPerson = () => {
     setWho(null);
+    setNewCity('');
     setNameText('');
     setRelation(null);
     setTimeout(() => nameRef.current?.focus(), 50);
@@ -124,8 +153,7 @@ export default function QuickEntryScreen() {
     const typed = nameText.trim();
     if (!typed) return { personId: null, newPersonName: null };
     // Typed a name without picking: reuse the one exact match, ask if there are several.
-    const key = simpleNameKey(typed);
-    const exact = searchPeople(getDb(), ctx.familyId, typed, 10).filter((p) => p.nameLatin === key);
+    const exact = exactKeyMatches(peopleIndex, typed);
     if (exact.length === 1) return { personId: exact[0]!.id, newPersonName: null };
     if (exact.length > 1) {
       setError({ field: 'newPersonName', message: t('errors.pickPerson') });
@@ -138,9 +166,13 @@ export default function QuickEntryScreen() {
     const person = resolveWho();
     if (!person) return;
     try {
-      const res = addEntry(ctx, {
+      const write = (input: Parameters<typeof addEntry>[1]) =>
+        editing ? updateEntry(ctx, editing.id, input) : addEntry(ctx, input);
+      const res = write({
         eventId,
         ...person,
+        newPersonCity: who?.kind === 'new' || person.newPersonName ? newCity || null : null,
+        newPersonPhone: who?.kind === 'new' ? (who.phone ?? null) : null,
         relation,
         direction,
         amount,
@@ -156,13 +188,14 @@ export default function QuickEntryScreen() {
           ? t('quickEntry.toastItem', { name: res.person.displayName })
           : t('quickEntry.toast', { name: res.person.displayName, amount: formatINR(amount) }),
       );
-      if (!next) {
+      if (!next || editing) {
         router.back();
         return;
       }
       // Keep direction, function and mode; clear the guest.
       setWho(null);
       setNameText('');
+      setNewCity('');
       setRelation(null);
       setDigits('');
       setItemNote('');
@@ -182,7 +215,13 @@ export default function QuickEntryScreen() {
       <ScreenHeader
         close
         subtitle={event.title}
-        title={subFunction ? t(`subFunction.${subFunction}` as 'subFunction.haldi', { defaultValue: subFunction }) : t(`eventType.${event.type}`)}
+        title={
+          editing
+            ? t('quickEntry.editTitle')
+            : subFunction
+              ? t(`subFunction.${subFunction}` as 'subFunction.haldi', { defaultValue: subFunction })
+              : t(`eventType.${event.type}`)
+        }
         right={
           saved > 0 ? (
             <View style={styles.savedPill} accessibilityLiveRegion="polite">
@@ -266,7 +305,24 @@ export default function QuickEntryScreen() {
                       })
                     : t('quickEntry.noHistory')}
                 </AppText>
-              ) : null}
+              ) : (
+                <View style={styles.newPersonExtra}>
+                  {who.phone ? (
+                    <AppText variant="caption" color={colors.inkMuted}>
+                      {t('quickEntry.fromContact', { phone: who.phone })}
+                    </AppText>
+                  ) : null}
+                  <TextInput
+                    accessibilityLabel={t('quickEntry.cityLabel')}
+                    placeholder={t('quickEntry.cityPlaceholder')}
+                    placeholderTextColor={colors.placeholder}
+                    value={newCity}
+                    onChangeText={setNewCity}
+                    autoCapitalize="words"
+                    style={styles.cityInput}
+                  />
+                </View>
+              )}
             </>
           ) : (
             <>
@@ -333,6 +389,50 @@ export default function QuickEntryScreen() {
                       {t('quickEntry.addNew', { name: nameText.trim() })}
                     </AppText>
                   </Pressable>
+                  {contactHits.length > 0 ? (
+                    <View style={styles.contactsBlock}>
+                      <AppText variant="tiny" color={colors.inkMuted} style={styles.blockLabel}>
+                        {t('quickEntry.fromContacts')}
+                      </AppText>
+                      {contactHits.map((c) => (
+                        <Pressable
+                          key={c.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={[c.displayName, c.phone].filter(Boolean).join(', ')}
+                          onPress={() => {
+                            setWho({ kind: 'new', name: c.displayName, phone: c.phone });
+                            Keyboard.dismiss();
+                          }}
+                          style={({ pressed }) => [styles.suggestion, pressed && { backgroundColor: colors.ground }]}
+                        >
+                          <Feather name="smartphone" size={20} color={colors.inkMuted} />
+                          <View style={{ flex: 1 }}>
+                            <AppText variant="bodyStrong" weight="bold">
+                              {c.displayName}
+                            </AppText>
+                            {c.phone ? (
+                              <AppText variant="caption" color={colors.inkMuted}>
+                                {c.phone}
+                              </AppText>
+                            ) : null}
+                          </View>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                  {contacts === null ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('quickEntry.searchContacts')}
+                      onPress={askContacts}
+                      style={({ pressed }) => [styles.suggestion, styles.addNew, pressed && { backgroundColor: colors.ground }]}
+                    >
+                      <Feather name="book" size={20} color={colors.inkMuted} />
+                      <AppText variant="label" color={colors.inkMuted} style={{ flex: 1 }}>
+                        {t('quickEntry.searchContacts')}
+                      </AppText>
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
             </>
@@ -460,8 +560,14 @@ export default function QuickEntryScreen() {
             }}
           />
           <View style={styles.actions}>
-            <Button label={t('quickEntry.save')} variant="secondary" onPress={() => save(false)} style={{ flex: 1 }} />
-            <Button label={t('quickEntry.saveNext')} iconRight="arrow-right" onPress={() => save(true)} style={{ flex: 2 }} />
+            {editing ? (
+              <Button label={t('quickEntry.saveChanges')} onPress={() => save(false)} style={{ flex: 1 }} />
+            ) : (
+              <>
+                <Button label={t('quickEntry.save')} variant="secondary" onPress={() => save(false)} style={{ flex: 1 }} />
+                <Button label={t('quickEntry.saveNext')} iconRight="arrow-right" onPress={() => save(true)} style={{ flex: 2 }} />
+              </>
+            )}
           </View>
         </View>
       ) : null}
@@ -506,6 +612,19 @@ const styles = StyleSheet.create({
   suggestions: { borderRadius: 16, borderWidth: 1, borderColor: colors.line, overflow: 'hidden', backgroundColor: colors.surface },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 56, paddingHorizontal: space.md, paddingVertical: space.sm },
   addNew: { borderTopWidth: 1, borderTopColor: colors.line },
+  contactsBlock: { borderTopWidth: 1, borderTopColor: colors.line },
+  blockLabel: { paddingHorizontal: space.md, paddingTop: space.sm, textTransform: 'uppercase', letterSpacing: 0.5 },
+  newPersonExtra: { gap: 6 },
+  cityInput: {
+    minHeight: 46,
+    borderRadius: radius.input,
+    borderWidth: 1.5,
+    borderColor: colors.lineStrong,
+    paddingHorizontal: 14,
+    fontFamily: fonts.regular,
+    fontSize: 16,
+    color: colors.ink,
+  },
   amountBox: { borderRadius: radius.button, paddingHorizontal: 14, paddingVertical: 4 },
   amountText: { fontFamily: fonts.extrabold, fontSize: 42, lineHeight: 54 },
   chipsRow: { flexDirection: 'row', gap: 6 },

@@ -77,7 +77,8 @@ function App() {
           <Stack.Screen name="events/[id]/index" />
           <Stack.Screen name="events/[id]/entry" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="events/[id]/cash" />
-          <Stack.Screen name="people/[id]" />
+          <Stack.Screen name="people/[id]/index" />
+          <Stack.Screen name="people/[id]/edit" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="scan-invite" options={{ animation: 'slide_from_bottom' }} />
         </Stack.Protected>
         <Stack.Protected guard={family === null}>

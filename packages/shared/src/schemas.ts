@@ -91,6 +91,9 @@ export const quickEntryInputSchema = z
     eventId: z.uuid(),
     personId: z.uuid().nullable(),
     newPersonName: z.string().trim().max(120).nullable(),
+    /** Only used when creating a new person. */
+    newPersonCity: optionalText(80).optional(),
+    newPersonPhone: optionalText(20).optional(),
     relation: optionalText(60),
     direction: z.enum(DIRECTIONS),
     amount: amountSchema,
@@ -129,3 +132,17 @@ export const createEventInputSchema = z
     path: ['hostName'],
   });
 export type CreateEventInput = z.infer<typeof createEventInputSchema>;
+
+export const personEditSchema = z.object({
+  displayName: z.string().trim().min(1, 'Enter a name').max(120),
+  relation: optionalText(60),
+  city: optionalText(80),
+  phone: optionalText(20),
+});
+export type PersonEdit = z.infer<typeof personEditSchema>;
+
+/** Counted cash at the end of a function, in whole rupees. */
+export const cashCountInputSchema = z.object({
+  eventId: z.uuid(),
+  countedAmount: amountSchema,
+});

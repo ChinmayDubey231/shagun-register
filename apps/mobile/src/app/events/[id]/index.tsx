@@ -47,6 +47,13 @@ export default function EventDetailScreen() {
     .filter(Boolean)
     .join(' · ');
 
+  const entryActions = (entryId: string, name: string, amount: string) =>
+    Alert.alert(`${name} · ${amount}`, undefined, [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => confirmDelete(entryId, name, amount) },
+      { text: t('eventDetail.editEntry'), onPress: () => router.push({ pathname: '/events/[id]/entry', params: { id, entryId } }) },
+    ]);
+
   const confirmDelete = (entryId: string, name: string, amount: string) =>
     Alert.alert(t('eventDetail.deleteTitle'), t('eventDetail.deleteBody', { name, amount }), [
       { text: t('common.cancel'), style: 'cancel' },
@@ -154,7 +161,7 @@ export default function EventDetailScreen() {
             <EntryRow
               item={item}
               onPress={() => router.push({ pathname: '/people/[id]', params: { id: item.personId } })}
-              onLongPress={() => confirmDelete(item.id, item.personName, item.mode === 'item' && !item.amount ? t('mode.item') : formatINR(item.amount))}
+              onLongPress={() => entryActions(item.id, item.personName, item.mode === 'item' && !item.amount ? t('mode.item') : formatINR(item.amount))}
             />
           </View>
         )}

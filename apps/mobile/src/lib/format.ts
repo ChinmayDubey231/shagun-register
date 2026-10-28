@@ -1,3 +1,4 @@
+import { isHonorific } from '@shagun/shared';
 import i18n from 'i18next';
 
 const locale = () => (i18n.language === 'hi' ? 'hi-IN' : 'en-IN');
@@ -43,10 +44,22 @@ export function isoToLocalDate(iso: string): Date {
   return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
 }
 
-/** "Ramesh Sharma" → "RS", "रमेश शर्मा" → "रश". */
+/** "Shri Ramesh Sharma ji" → "RS", "डॉ. राजेश अग्रवाल" → "रअ". Honorifics are skipped. */
 export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const all = name.trim().split(/\s+/).filter(Boolean);
+  const named = all.filter((w) => !isHonorific(w));
+  const parts = named.length ? named : all;
   const first = Array.from(parts[0] ?? '?')[0] ?? '?';
   const second = parts.length > 1 ? (Array.from(parts[parts.length - 1]!)[0] ?? '') : '';
   return (first + second).toUpperCase();
+}
+
+/** "2026-08-03" → "Aug 2026" */
+export function formatMonthYear(iso: string): string {
+  const [y, m] = iso.split('-').map(Number);
+  return new Intl.DateTimeFormat(i18n.language === 'hi' ? 'hi-IN' : 'en-IN', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, 1)));
 }

@@ -143,7 +143,8 @@
     "deleteTitle": "Delete this entry?",
     "deleteBody": "{{name}} · {{amount}}",
     "notFound": "This event is no longer in the ledger.",
-    "entryActions": "Long press an entry to delete it"
+    "entryActions": "Long press an entry to edit or delete it",
+    "editEntry": "Edit"
   },
   "quickEntry": {
     "from": "From",
@@ -151,6 +152,11 @@
     "nameLabel": "Name",
     "namePlaceholder": "Type a name",
     "addNew": "Add “{{name}}” as a new person",
+    "fromContacts": "From your contacts",
+    "searchContacts": "Search phone contacts",
+    "fromContact": "From contacts · {{phone}}",
+    "cityLabel": "City (optional)",
+    "cityPlaceholder": "City (optional), e.g. Indore",
     "newPerson": "New person",
     "clearPerson": "Change person",
     "last": "Last: {{who}} {{amount}} · {{event}}",
@@ -173,7 +179,9 @@
     "toast": "Saved · {{name}} {{amount}}",
     "toastItem": "Saved · {{name}} · item",
     "keyDelete": "Delete digit",
-    "amountChips": "Common amounts"
+    "amountChips": "Common amounts",
+    "editTitle": "Fix entry",
+    "saveChanges": "Save changes"
   },
   "people": {
     "title": "People",
@@ -187,12 +195,27 @@
   "person": {
     "youGave": "↗ You gave · {{count}}",
     "theyGave": "↙ They gave · {{count}}",
-    "since_one": "{{count}} exchange since {{year}}",
-    "since_other": "{{count}} exchanges since {{year}}",
     "ourFunction": "Our function",
     "theirFunction": "Their function",
     "emptyTitle": "No exchanges yet",
-    "notFound": "This person is no longer in the ledger."
+    "notFound": "This person is no longer in the ledger.",
+    "sinceLast_one": "{{count}} exchange since {{year}} · last in {{last}}",
+    "sinceLast_other": "{{count}} exchanges since {{year}} · last in {{last}}",
+    "show": "Show",
+    "filterAll": "All {{count}}",
+    "filterGiven": "Given {{count}}",
+    "filterReceived": "Received {{count}}",
+    "upcoming": "Upcoming: {{title}}",
+    "theyGaveAt": "They gave {{amount}} at {{event}}",
+    "edit": "Edit person",
+    "editTitle": "Edit person",
+    "nameLabel": "Name",
+    "nameHint": "Write it the way the family says it. Hindi or English both work.",
+    "cityLabel": "City",
+    "phoneLabel": "Phone",
+    "otherRelation": "Other relation",
+    "otherRelationPlaceholder": "e.g. Jija ji",
+    "save": "Save changes"
   },
   "more": {
     "title": "More",
@@ -205,7 +228,6 @@
   "later": {
     "title": "Not built yet",
     "scan": "Scanning invite cards arrives in week 5. For now, create the event by typing it in.",
-    "cash": "Cash reconciliation arrives in week 2.",
     "typeInstead": "Create event instead"
   },
   "errors": {
@@ -218,6 +240,26 @@
     "eventId": "This event is no longer in the ledger",
     "name": "Give the ledger a name",
     "pickPerson": "More than one person has this name. Pick one from the list.",
-    "generic": "That didn't save. Check the form and try again."
+    "generic": "That didn't save. Check the form and try again.",
+    "displayName": "Enter a name"
+  },
+  "cash": {
+    "title": "Count the cash",
+    "logged_one": "Logged cash · {{count}} entry",
+    "logged_other": "Logged cash · {{count}} entries",
+    "counted": "Cash you counted",
+    "match": "Matches the logged cash",
+    "matchHint": "Every envelope is accounted for.",
+    "short": "{{amount}} short",
+    "shortHint": "Usually a missed envelope or a mistyped amount. Check the entries below.",
+    "over": "{{amount}} over",
+    "overHint": "A gift may not be logged yet. Log it, then count again.",
+    "entries": "Cash entries",
+    "ticked": "{{count}} ticked · {{amount}}",
+    "tickHint": "Tick envelopes as you find them. To fix a wrong amount, long press the entry on the event screen.",
+    "earlier": "Earlier counts",
+    "empty": "No cash gifts logged for this event yet",
+    "save": "Save this count",
+    "keptNote": "Every count is kept for the family's record"
   }
 }

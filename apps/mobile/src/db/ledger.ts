@@ -1,14 +1,19 @@
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import {
+  cashCountInputSchema,
   createEventInputSchema,
+  createPersonSearch,
+  exactKeyMatches,
   hasDevanagari,
+  matchKey,
+  MATCH_KEY_VERSION,
+  personEditSchema,
   quickEntryInputSchema,
-  simpleNameKey,
   type SyncedTable,
 } from '@shagun/shared';
 import * as schema from './schema';
-import { appSettings, entries, events, outbox, people, syncMeta } from './schema';
+import { appSettings, cashCounts, entries, events, outbox, people, syncMeta } from './schema';
 import type { EntryRow, EventRow, PersonRow } from './schema';
 
 /**
@@ -30,6 +35,12 @@ export interface LedgerContext {
   now: () => number;
 }
 
+/** First zod issue as a LedgerError. Structural type: the zod instance lives in @shagun/shared. */
+function validationError(error: { issues: readonly { message: string; path: readonly PropertyKey[] }[] }): LedgerError {
+  const issue = error.issues[0];
+  return new LedgerError('VALIDATION', issue?.message ?? 'Check the form', String(issue?.path[0] ?? ''));
+}
+
 export class LedgerError extends Error {
   constructor(
     readonly code: 'NOT_FOUND' | 'VALIDATION',
@@ -47,6 +58,7 @@ export class LedgerError extends Error {
 
 const SETTING_DEVICE_ID = 'deviceId';
 const SETTING_FAMILY_ID = 'currentFamilyId';
+const SETTING_MATCH_KEY_VERSION = 'matchKeyVersion';
 
 function getSetting(db: Writer, key: string): string | undefined {
   return db.select().from(appSettings).where(eq(appSettings.key, key)).get()?.value;
@@ -71,10 +83,31 @@ export function loadLocalSetup(db: LedgerDb, newId: () => string): LocalSetup {
     deviceId = newId();
     setSetting(db, SETTING_DEVICE_ID, deviceId);
   }
+  refreshMatchKeys(db);
   const familyId = getSetting(db, SETTING_FAMILY_ID);
   if (!familyId) return { deviceId, family: null };
   const meta = db.select().from(syncMeta).where(eq(syncMeta.familyId, familyId)).get();
   return { deviceId, family: meta ? { id: meta.familyId, name: meta.familyName } : null };
+}
+
+/**
+ * Recomputes every person's match key when matchKey() has changed since they were stored.
+ * The key is derived data (the server computes its own), so this does not queue sync changes.
+ */
+export function refreshMatchKeys(db: LedgerDb): number {
+  if (getSetting(db, SETTING_MATCH_KEY_VERSION) === String(MATCH_KEY_VERSION)) return 0;
+  let changed = 0;
+  db.transaction((tx) => {
+    for (const p of tx.select({ id: people.id, displayName: people.displayName, nameLatin: people.nameLatin }).from(people).all()) {
+      const key = matchKey(p.displayName);
+      if (key !== p.nameLatin) {
+        tx.update(people).set({ nameLatin: key }).where(eq(people.id, p.id)).run();
+        changed++;
+      }
+    }
+    setSetting(tx, SETTING_MATCH_KEY_VERSION, String(MATCH_KEY_VERSION));
+  });
+  return changed;
 }
 
 /**
@@ -105,7 +138,7 @@ function queue(tx: Writer, table: SyncedTable, record: { id: string }, op: 'upse
 function insertPerson(
   tx: Writer,
   ctx: LedgerContext,
-  input: { displayName: string; relation?: string | null; city?: string | null },
+  input: { displayName: string; relation?: string | null; city?: string | null; phone?: string | null },
 ): PersonRow {
   const displayName = input.displayName.trim().replace(/\s+/g, ' ');
   const at = ctx.now();
@@ -116,11 +149,11 @@ function insertPerson(
     deletedAt: null,
     seq: null,
     displayName,
-    nameLatin: simpleNameKey(displayName),
+    nameLatin: matchKey(displayName),
     nameDevanagari: hasDevanagari(displayName) ? displayName : null,
     relation: input.relation?.trim() || null,
     city: input.city?.trim() || null,
-    phone: null,
+    phone: input.phone?.trim() || null,
     mergedInto: null,
   };
   tx.insert(people).values(row).run();
@@ -146,10 +179,7 @@ export function createPerson(
 
 export function createEvent(ctx: LedgerContext, raw: unknown): EventRow {
   const parsed = createEventInputSchema.safeParse(raw);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    throw new LedgerError('VALIDATION', issue?.message ?? 'Check the form', String(issue?.path[0] ?? ''));
-  }
+  if (!parsed.success) throw validationError(parsed.error);
   const input = parsed.data;
   return ctx.db.transaction((tx) => {
     let hostPersonId: string | null = null;
@@ -193,37 +223,12 @@ export interface AddEntryResult {
 /** Quick Entry's save. Creates the person if new, updates their relation if it changed, logs the gift. */
 export function addEntry(ctx: LedgerContext, raw: unknown): AddEntryResult {
   const parsed = quickEntryInputSchema.safeParse(raw);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    throw new LedgerError('VALIDATION', issue?.message ?? 'Check the form', String(issue?.path[0] ?? ''));
-  }
+  if (!parsed.success) throw validationError(parsed.error);
   const input = parsed.data;
 
   return ctx.db.transaction((tx) => {
-    const event = tx
-      .select({ id: events.id })
-      .from(events)
-      .where(and(eq(events.id, input.eventId), eq(events.familyId, ctx.familyId), isNull(events.deletedAt)))
-      .get();
-    if (!event) throw new LedgerError('NOT_FOUND', 'This event is no longer in the ledger', 'eventId');
-
-    let person: PersonRow;
-    let createdPerson = false;
-    if (input.personId) {
-      const existing = findPerson(tx, ctx.familyId, input.personId);
-      if (!existing) throw new LedgerError('NOT_FOUND', 'That person is no longer in the ledger', 'personId');
-      person = existing;
-      const relation = input.relation?.trim() || null;
-      if (relation && relation !== person.relation) {
-        person = { ...person, relation, updatedAt: ctx.now() };
-        tx.update(people).set({ relation, updatedAt: person.updatedAt }).where(eq(people.id, person.id)).run();
-        queue(tx, 'people', person, 'upsert', person.updatedAt);
-      }
-    } else {
-      person = insertPerson(tx, ctx, { displayName: input.newPersonName ?? '', relation: input.relation });
-      createdPerson = true;
-    }
-
+    assertEvent(tx, ctx, input.eventId);
+    const { person, createdPerson } = resolvePerson(tx, ctx, input);
     const at = ctx.now();
     const entry: EntryRow = {
       id: ctx.newId(),
@@ -248,6 +253,83 @@ export function addEntry(ctx: LedgerContext, raw: unknown): AddEntryResult {
     queue(tx, 'entries', entry, 'upsert', at);
     return { entry, person, createdPerson };
   });
+}
+
+type QuickEntryData = ReturnType<typeof quickEntryInputSchema.parse>;
+
+function assertEvent(tx: Writer, ctx: LedgerContext, eventId: string) {
+  const event = tx
+    .select({ id: events.id })
+    .from(events)
+    .where(and(eq(events.id, eventId), eq(events.familyId, ctx.familyId), isNull(events.deletedAt)))
+    .get();
+  if (!event) throw new LedgerError('NOT_FOUND', 'This event is no longer in the ledger', 'eventId');
+}
+
+/** The existing person (relation updated if it changed) or a newly created one. */
+function resolvePerson(tx: Writer, ctx: LedgerContext, input: QuickEntryData) {
+  if (input.personId) {
+    let person = findPerson(tx, ctx.familyId, input.personId);
+    if (!person) throw new LedgerError('NOT_FOUND', 'That person is no longer in the ledger', 'personId');
+    const relation = input.relation?.trim() || null;
+    if (relation && relation !== person.relation) {
+      person = { ...person, relation, updatedAt: ctx.now() };
+      tx.update(people).set({ relation, updatedAt: person.updatedAt }).where(eq(people.id, person.id)).run();
+      queue(tx, 'people', person, 'upsert', person.updatedAt);
+    }
+    return { person, createdPerson: false };
+  }
+  const person = insertPerson(tx, ctx, {
+    displayName: input.newPersonName ?? '',
+    relation: input.relation,
+    city: input.newPersonCity,
+    phone: input.newPersonPhone,
+  });
+  return { person, createdPerson: true };
+}
+
+/**
+ * Fixes an entry (wrong amount, wrong person, wrong function). Keeps its id and createdAt.
+ * The server keeps the previous version in entryHistory when this syncs (week 4).
+ */
+export function updateEntry(ctx: LedgerContext, entryId: string, raw: unknown): AddEntryResult {
+  const parsed = quickEntryInputSchema.safeParse(raw);
+  if (!parsed.success) throw validationError(parsed.error);
+  const input = parsed.data;
+  return ctx.db.transaction((tx) => {
+    const current = tx
+      .select()
+      .from(entries)
+      .where(and(eq(entries.id, entryId), eq(entries.familyId, ctx.familyId), isNull(entries.deletedAt)))
+      .get();
+    if (!current) throw new LedgerError('NOT_FOUND', 'This entry is no longer in the ledger', 'entryId');
+    assertEvent(tx, ctx, input.eventId);
+    const { person, createdPerson } = resolvePerson(tx, ctx, input);
+    const at = ctx.now();
+    const entry: EntryRow = {
+      ...current,
+      eventId: input.eventId,
+      personId: person.id,
+      direction: input.direction,
+      amount: input.amount,
+      mode: input.mode,
+      itemNote: input.mode === 'item' ? input.itemNote?.trim() || null : null,
+      subFunction: input.subFunction || null,
+      note: input.note?.trim() || null,
+      updatedAt: at,
+    };
+    tx.update(entries).set(entry).where(eq(entries.id, entryId)).run();
+    queue(tx, 'entries', entry, 'upsert', at);
+    return { entry, person, createdPerson };
+  });
+}
+
+export function getEntry(db: LedgerDb, familyId: string, entryId: string) {
+  return db
+    .select()
+    .from(entries)
+    .where(and(eq(entries.id, entryId), eq(entries.familyId, familyId), isNull(entries.deletedAt)))
+    .get();
 }
 
 /** Soft delete: the row stays with deletedAt set, so the delete can sync to other phones. */
@@ -377,32 +459,38 @@ export interface PersonMatch extends PersonRow {
   lastDirection: EntryRow['direction'] | null;
 }
 
-/** Name search for Quick Entry. Week 2 swaps this for Fuse.js on the full match key. */
-export function searchPeople(db: LedgerDb, familyId: string, query: string, limit = 5): PersonMatch[] {
-  const key = simpleNameKey(query);
-  if (!key) return [];
-  const pattern = `%${key.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
-  const rows = db
-    .select()
+const lastEntry = (column: string) =>
+  sql.raw(
+    `(select e.${column} from entries e join events ev on ev.id = e.event_id
+      where e.person_id = "people"."id" and e.deleted_at is null and ev.deleted_at is null
+      order by ev.date desc, e.created_at desc limit 1)`,
+  );
+
+/**
+ * Every live person with their last exchange, in one query. The UI builds a Fuse.js
+ * index from this (createPersonSearch) and searches it on each keystroke.
+ */
+export function getPeopleIndex(db: LedgerDb, familyId: string): PersonMatch[] {
+  return db
+    .select({
+      ...personColumns(),
+      lastAmount: sql<number | null>`${lastEntry('amount')}`,
+      lastDirection: sql<EntryRow['direction'] | null>`${lastEntry('direction')}`,
+    })
     .from(people)
-    .where(
-      and(
-        eq(people.familyId, familyId),
-        isNull(people.deletedAt),
-        isNull(people.mergedInto),
-        or(
-          sql`${people.nameLatin} like ${pattern} escape '\\'`,
-          sql`lower(${people.displayName}) like ${pattern} escape '\\'`,
-        ),
-      ),
-    )
+    .where(and(eq(people.familyId, familyId), isNull(people.deletedAt), isNull(people.mergedInto)))
     .orderBy(people.displayName)
-    .limit(limit)
     .all();
-  return rows.map((p) => {
-    const last = getLastExchange(db, p.id);
-    return { ...p, lastAmount: last?.amount ?? null, lastDirection: last?.direction ?? null };
-  });
+}
+
+/** Fuzzy name search across Hindi and English spellings. Screens memoize the index; this is the one-off form. */
+export function searchPeople(db: LedgerDb, familyId: string, query: string, limit = 5): PersonMatch[] {
+  return createPersonSearch(getPeopleIndex(db, familyId))(query, limit);
+}
+
+/** People whose match key equals this name's key ("Shri Ramesh Sharma ji" = "रमेश शर्मा"). */
+export function findSameName(db: LedgerDb, familyId: string, name: string): PersonMatch[] {
+  return exactKeyMatches(getPeopleIndex(db, familyId), name);
 }
 
 export interface LastExchange {
@@ -499,6 +587,125 @@ export function getPersonHistory(db: LedgerDb, personId: string): PersonHistoryI
 
 export function countPendingChanges(db: LedgerDb): number {
   return db.select({ n: sql<number>`count(*)` }).from(outbox).get()?.n ?? 0;
+}
+
+export function updatePerson(ctx: LedgerContext, personId: string, raw: unknown): PersonRow {
+  const parsed = personEditSchema.safeParse(raw);
+  if (!parsed.success) throw validationError(parsed.error);
+  const input = parsed.data;
+  return ctx.db.transaction((tx) => {
+    const current = findPerson(tx, ctx.familyId, personId);
+    if (!current) throw new LedgerError('NOT_FOUND', 'That person is no longer in the ledger', 'personId');
+    const displayName = input.displayName.replace(/\s+/g, ' ');
+    const next: PersonRow = {
+      ...current,
+      displayName,
+      nameLatin: matchKey(displayName),
+      nameDevanagari: hasDevanagari(displayName) ? displayName : current.nameDevanagari,
+      relation: input.relation?.trim() || null,
+      city: input.city?.trim() || null,
+      phone: input.phone?.trim() || null,
+      updatedAt: ctx.now(),
+    };
+    tx.update(people).set(next).where(eq(people.id, personId)).run();
+    queue(tx, 'people', next, 'upsert', next.updatedAt);
+    return next;
+  });
+}
+
+/** Upcoming functions hosted by this person (invites we have, gifts not yet given). */
+export function getUpcomingForPerson(db: LedgerDb, familyId: string, personId: string, today: string) {
+  return db
+    .select({ id: events.id, title: events.title, date: events.date, type: events.type, venue: events.venue })
+    .from(events)
+    .where(
+      and(
+        eq(events.familyId, familyId),
+        eq(events.hostPersonId, personId),
+        eq(events.role, 'attended'),
+        isNull(events.deletedAt),
+        gte(events.date, today),
+      ),
+    )
+    .orderBy(asc(events.date))
+    .all();
+}
+
+// ---------------------------------------------------------------------------
+// Cash reconciliation
+// ---------------------------------------------------------------------------
+
+export interface CashSummary {
+  loggedCash: number;
+  cashEntries: number;
+}
+
+/** Cash received at this event, as logged. */
+export function getCashSummary(db: LedgerDb, eventId: string): CashSummary {
+  const row = db
+    .select({
+      loggedCash: sql<number>`coalesce(sum(${entries.amount}), 0)`,
+      cashEntries: sql<number>`count(*)`,
+    })
+    .from(entries)
+    .where(
+      and(eq(entries.eventId, eventId), eq(entries.mode, 'cash'), eq(entries.direction, 'received'), isNull(entries.deletedAt)),
+    )
+    .get();
+  return { loggedCash: row?.loggedCash ?? 0, cashEntries: row?.cashEntries ?? 0 };
+}
+
+/** Cash entries for checking against envelopes, largest first. */
+export function getCashEntries(db: LedgerDb, eventId: string): EntryListItem[] {
+  return db
+    .select(entryListColumns())
+    .from(entries)
+    .innerJoin(people, eq(people.id, entries.personId))
+    .where(
+      and(eq(entries.eventId, eventId), eq(entries.mode, 'cash'), eq(entries.direction, 'received'), isNull(entries.deletedAt)),
+    )
+    .orderBy(desc(entries.amount), desc(entries.createdAt))
+    .all()
+    .map((r) => ({ ...r, pending: Boolean(r.pending) }));
+}
+
+/** Saves one count. Every count is kept (an audit trail), never overwritten. */
+export function addCashCount(ctx: LedgerContext, raw: unknown) {
+  const parsed = cashCountInputSchema.safeParse(raw);
+  if (!parsed.success) throw validationError(parsed.error);
+  const { eventId, countedAmount } = parsed.data;
+  return ctx.db.transaction((tx) => {
+    const event = tx
+      .select({ id: events.id })
+      .from(events)
+      .where(and(eq(events.id, eventId), eq(events.familyId, ctx.familyId), isNull(events.deletedAt)))
+      .get();
+    if (!event) throw new LedgerError('NOT_FOUND', 'This event is no longer in the ledger', 'eventId');
+    const at = ctx.now();
+    const row = {
+      id: ctx.newId(),
+      familyId: ctx.familyId,
+      updatedAt: at,
+      deletedAt: null,
+      seq: null,
+      eventId,
+      countedAmount,
+      countedBy: ctx.userId,
+      countedAt: at,
+    };
+    tx.insert(cashCounts).values(row).run();
+    queue(tx, 'cashCounts', row, 'upsert', at);
+    return row;
+  });
+}
+
+export function getCashCounts(db: LedgerDb, eventId: string) {
+  return db
+    .select()
+    .from(cashCounts)
+    .where(and(eq(cashCounts.eventId, eventId), isNull(cashCounts.deletedAt)))
+    .orderBy(desc(cashCounts.countedAt))
+    .all();
 }
 
 function eventColumns() {
