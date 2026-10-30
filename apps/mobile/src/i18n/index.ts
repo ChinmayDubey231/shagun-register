@@ -27,9 +27,17 @@ void i18n.use(initReactI18next).init({
 
 /** Maps a write-path validation field to its translated message. */
 export function errorMessage(field: string | undefined): string {
-  const known = ['amount', 'newPersonName', 'personId', 'itemNote', 'title', 'hostName', 'eventId', 'name'] as const;
+  const known = ['amount', 'newPersonName', 'personId', 'itemNote', 'title', 'hostName', 'eventId', 'name', 'role'] as const;
   const key = known.find((k) => k === field);
   return i18n.t(key ? `errors.${key}` : 'errors.generic');
 }
 
 export default i18n;
+
+/** Maps an ApiError (or anything thrown by a network call) to a translated message. */
+export function apiErrorMessage(e: unknown): string {
+  const code = (e as { code?: string } | null)?.code;
+  const known = ['NETWORK', 'NOT_CONFIGURED', 'INVITE_INVALID', 'RATE_LIMITED', 'ROLE_FORBIDDEN', 'OWNER_CANNOT_LEAVE', 'UNAUTHENTICATED', 'CONFLICT'] as const;
+  const key = known.find((k) => k === code);
+  return i18n.t(key ? `apiErrors.${key}` : 'apiErrors.generic');
+}

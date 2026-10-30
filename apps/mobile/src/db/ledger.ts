@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import {
   cashCountInputSchema,
@@ -10,10 +10,12 @@ import {
   MATCH_KEY_VERSION,
   personEditSchema,
   quickEntryInputSchema,
+  type FamilySummary,
+  type MemberRole,
   type SyncedTable,
 } from '@shagun/shared';
 import * as schema from './schema';
-import { appSettings, cashCounts, entries, events, outbox, people, syncMeta } from './schema';
+import { appSettings, cashCounts, entries, events, outbox, people, syncMeta, type SyncMetaRow } from './schema';
 import type { EntryRow, EventRow, PersonRow } from './schema';
 
 /**
@@ -29,8 +31,10 @@ export interface LedgerContext {
   db: LedgerDb;
   familyId: string;
   deviceId: string;
-  /** "local" until Google sign-in arrives in week 3. */
+  /** The signed-in account's id ("local" in tests and before sign-in). Stored as createdBy. */
   userId: string;
+  /** Viewers can read but not write. Defaults to owner. */
+  role?: MemberRole;
   newId: () => string;
   now: () => number;
 }
@@ -43,7 +47,7 @@ function validationError(error: { issues: readonly { message: string; path: read
 
 export class LedgerError extends Error {
   constructor(
-    readonly code: 'NOT_FOUND' | 'VALIDATION',
+    readonly code: 'NOT_FOUND' | 'VALIDATION' | 'FORBIDDEN',
     message: string,
     readonly field?: string,
   ) {
@@ -71,23 +75,53 @@ function setSetting(db: Writer, key: string, value: string) {
     .run();
 }
 
-export interface LocalSetup {
-  deviceId: string;
-  family: { id: string; name: string } | null;
+export interface LocalFamily {
+  id: string;
+  name: string;
+  role: MemberRole;
+  /** False until the server has accepted this ledger (POST /families). */
+  registered: boolean;
 }
 
-/** Reads (and on first launch creates) the device id, and returns the current family ledger if there is one. */
-export function loadLocalSetup(db: LedgerDb, newId: () => string): LocalSetup {
+export interface LocalSetup {
+  deviceId: string;
+  family: LocalFamily | null;
+}
+
+const toLocalFamily = (m: SyncMetaRow): LocalFamily => ({
+  id: m.familyId,
+  name: m.familyName,
+  role: m.role,
+  registered: m.registeredAt !== null,
+});
+
+/**
+ * Reads (and on first launch creates) the device id and returns the current ledger for
+ * this account. Ledgers made before sign-in existed are claimed by the first account.
+ */
+export function loadLocalSetup(db: LedgerDb, newId: () => string, userId: string | null = null): LocalSetup {
   let deviceId = getSetting(db, SETTING_DEVICE_ID);
   if (!deviceId) {
     deviceId = newId();
     setSetting(db, SETTING_DEVICE_ID, deviceId);
   }
   refreshMatchKeys(db);
-  const familyId = getSetting(db, SETTING_FAMILY_ID);
-  if (!familyId) return { deviceId, family: null };
-  const meta = db.select().from(syncMeta).where(eq(syncMeta.familyId, familyId)).get();
-  return { deviceId, family: meta ? { id: meta.familyId, name: meta.familyName } : null };
+  if (!userId) return { deviceId, family: null };
+  db.update(syncMeta).set({ userId }).where(isNull(syncMeta.userId)).run();
+  const mine = listLocalFamilies(db, userId);
+  const currentId = getSetting(db, SETTING_FAMILY_ID);
+  const current = mine.find((f) => f.id === currentId) ?? mine[0] ?? null;
+  if (current && current.id !== currentId) setSetting(db, SETTING_FAMILY_ID, current.id);
+  return { deviceId, family: current };
+}
+
+/** Ledgers on this phone that belong to the signed-in account. */
+export function listLocalFamilies(db: LedgerDb, userId: string): LocalFamily[] {
+  return db.select().from(syncMeta).where(eq(syncMeta.userId, userId)).orderBy(syncMeta.familyName).all().map(toLocalFamily);
+}
+
+export function setCurrentFamily(db: LedgerDb, familyId: string) {
+  setSetting(db, SETTING_FAMILY_ID, familyId);
 }
 
 /**
@@ -111,18 +145,89 @@ export function refreshMatchKeys(db: LedgerDb): number {
 }
 
 /**
- * Creates a family ledger on this phone and makes it current. The id is a UUID made here,
- * so in week 3 `POST /families` can register the same id on the server.
+ * Creates a family ledger on this phone and makes it current. The id is a UUID made here;
+ * `POST /families` registers the same id when the phone is online (see registerPendingFamilies).
  */
-export function createLocalFamily(db: LedgerDb, name: string, newId: () => string) {
+export function createLocalFamily(db: LedgerDb, name: string, newId: () => string, userId: string | null = null): LocalFamily {
   const trimmed = name.trim();
   if (!trimmed) throw new LedgerError('VALIDATION', 'Give the ledger a name', 'name');
   const id = newId();
   db.transaction((tx) => {
-    tx.insert(syncMeta).values({ familyId: id, familyName: trimmed, lastPulledSeq: 0 }).run();
+    tx.insert(syncMeta).values({ familyId: id, familyName: trimmed, lastPulledSeq: 0, userId, role: 'owner' }).run();
     setSetting(tx, SETTING_FAMILY_ID, id);
   });
-  return { id, name: trimmed };
+  return { id, name: trimmed, role: 'owner', registered: false };
+}
+
+/** Ledgers this account owns that the server hasn't accepted yet. */
+export function unregisteredFamilies(db: LedgerDb, userId: string): LocalFamily[] {
+  return db
+    .select()
+    .from(syncMeta)
+    .where(and(eq(syncMeta.userId, userId), isNull(syncMeta.registeredAt)))
+    .all()
+    .map(toLocalFamily);
+}
+
+export function markFamilyRegistered(db: LedgerDb, familyId: string, at: number) {
+  db.update(syncMeta).set({ registeredAt: at }).where(eq(syncMeta.familyId, familyId)).run();
+}
+
+/** After joining with an invite code: add the ledger (its records arrive with sync) and make it current. */
+export function addJoinedFamily(db: LedgerDb, family: FamilySummary, userId: string, at: number): LocalFamily {
+  db.transaction((tx) => {
+    tx.insert(syncMeta)
+      .values({ familyId: family.id, familyName: family.name, userId, role: family.role, registeredAt: at, lastPulledSeq: 0 })
+      .onConflictDoUpdate({
+        target: syncMeta.familyId,
+        set: { familyName: family.name, userId, role: family.role, registeredAt: at },
+      })
+      .run();
+    setSetting(tx, SETTING_FAMILY_ID, family.id);
+  });
+  return { id: family.id, name: family.name, role: family.role, registered: true };
+}
+
+/**
+ * Brings local ledgers in line with GET /me: new names and roles, ledgers joined on another
+ * phone, and ledgers this account was removed from (their local data is deleted).
+ * Ledgers not yet registered are left alone: the server doesn't know them yet.
+ */
+export function applyServerFamilies(db: LedgerDb, userId: string, server: FamilySummary[], at: number) {
+  const known = new Set(server.map((f) => f.id));
+  db.transaction((tx) => {
+    for (const f of server) {
+      tx.insert(syncMeta)
+        .values({ familyId: f.id, familyName: f.name, userId, role: f.role, registeredAt: at, lastPulledSeq: 0 })
+        .onConflictDoUpdate({ target: syncMeta.familyId, set: { familyName: f.name, role: f.role, userId, registeredAt: at } })
+        .run();
+    }
+    const gone = tx
+      .select({ id: syncMeta.familyId })
+      .from(syncMeta)
+      .where(and(eq(syncMeta.userId, userId), isNotNull(syncMeta.registeredAt)))
+      .all()
+      .filter((f) => !known.has(f.id))
+      .map((f) => f.id);
+    if (gone.length) forgetFamilies(tx, gone);
+  });
+}
+
+/** Deletes every local record of these ledgers, including changes still waiting to sync. */
+function forgetFamilies(tx: Writer, familyIds: string[]) {
+  for (const table of [entries, events, people, cashCounts]) {
+    tx.delete(table).where(inArray(table.familyId, familyIds)).run();
+  }
+  const ids = new Set(familyIds);
+  const queued = tx.select({ id: outbox.id, payload: outbox.payload }).from(outbox).all();
+  const drop = queued.filter((q) => ids.has((JSON.parse(q.payload) as { familyId?: string }).familyId ?? '')).map((q) => q.id);
+  if (drop.length) tx.delete(outbox).where(inArray(outbox.id, drop)).run();
+  tx.delete(syncMeta).where(inArray(syncMeta.familyId, familyIds)).run();
+  if (ids.has(getSetting(tx, SETTING_FAMILY_ID) ?? '')) tx.delete(appSettings).where(eq(appSettings.key, SETTING_FAMILY_ID)).run();
+}
+
+function assertCanWrite(ctx: LedgerContext) {
+  if (ctx.role === 'viewer') throw new LedgerError('FORBIDDEN', 'Viewers can’t change the ledger', 'role');
 }
 
 // ---------------------------------------------------------------------------
@@ -173,11 +278,13 @@ export function createPerson(
   ctx: LedgerContext,
   input: { displayName: string; relation?: string | null; city?: string | null },
 ): PersonRow {
+  assertCanWrite(ctx);
   if (!input.displayName.trim()) throw new LedgerError('VALIDATION', 'Enter a name', 'displayName');
   return ctx.db.transaction((tx) => insertPerson(tx, ctx, input));
 }
 
 export function createEvent(ctx: LedgerContext, raw: unknown): EventRow {
+  assertCanWrite(ctx);
   const parsed = createEventInputSchema.safeParse(raw);
   if (!parsed.success) throw validationError(parsed.error);
   const input = parsed.data;
@@ -222,6 +329,7 @@ export interface AddEntryResult {
 
 /** Quick Entry's save. Creates the person if new, updates their relation if it changed, logs the gift. */
 export function addEntry(ctx: LedgerContext, raw: unknown): AddEntryResult {
+  assertCanWrite(ctx);
   const parsed = quickEntryInputSchema.safeParse(raw);
   if (!parsed.success) throw validationError(parsed.error);
   const input = parsed.data;
@@ -293,6 +401,7 @@ function resolvePerson(tx: Writer, ctx: LedgerContext, input: QuickEntryData) {
  * The server keeps the previous version in entryHistory when this syncs (week 4).
  */
 export function updateEntry(ctx: LedgerContext, entryId: string, raw: unknown): AddEntryResult {
+  assertCanWrite(ctx);
   const parsed = quickEntryInputSchema.safeParse(raw);
   if (!parsed.success) throw validationError(parsed.error);
   const input = parsed.data;
@@ -334,6 +443,7 @@ export function getEntry(db: LedgerDb, familyId: string, entryId: string) {
 
 /** Soft delete: the row stays with deletedAt set, so the delete can sync to other phones. */
 export function deleteEntry(ctx: LedgerContext, entryId: string) {
+  assertCanWrite(ctx);
   ctx.db.transaction((tx) => {
     const row = tx
       .select()
@@ -590,6 +700,7 @@ export function countPendingChanges(db: LedgerDb): number {
 }
 
 export function updatePerson(ctx: LedgerContext, personId: string, raw: unknown): PersonRow {
+  assertCanWrite(ctx);
   const parsed = personEditSchema.safeParse(raw);
   if (!parsed.success) throw validationError(parsed.error);
   const input = parsed.data;
@@ -671,6 +782,7 @@ export function getCashEntries(db: LedgerDb, eventId: string): EntryListItem[] {
 
 /** Saves one count. Every count is kept (an audit trail), never overwritten. */
 export function addCashCount(ctx: LedgerContext, raw: unknown) {
+  assertCanWrite(ctx);
   const parsed = cashCountInputSchema.safeParse(raw);
   if (!parsed.success) throw validationError(parsed.error);
   const { eventId, countedAmount } = parsed.data;

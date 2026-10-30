@@ -13,7 +13,7 @@ import { getDb } from '@/db/client';
 import { getPerson, getPersonHistory, getUpcomingForPerson } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
 import { formatDate, formatMonthYear, todayISO } from '@/lib/format';
-import { useFamilyId } from '@/store/session';
+import { useCanEdit, useFamilyId } from '@/store/session';
 import { colors, directionColors, radius, space } from '@/theme';
 
 type Filter = 'all' | 'given' | 'received';
@@ -24,6 +24,7 @@ export default function PersonHistoryScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const familyId = useFamilyId();
+  const canEdit = useCanEdit();
   const [filter, setFilter] = useState<Filter>('all');
   const person = useDbQuery(() => getPerson(getDb(), familyId, id), ['people'], [familyId, id]);
   const history = useDbQuery(() => getPersonHistory(getDb(), id), ['entries', 'events'], [id]);
@@ -57,7 +58,7 @@ export default function PersonHistoryScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
       <ScreenHeader
         right={
-          <IconButton
+          !canEdit ? undefined : <IconButton
             icon="edit-2"
             label={t('person.edit')}
             onPress={() => router.push({ pathname: '/people/[id]/edit', params: { id } })}
@@ -115,7 +116,7 @@ export default function PersonHistoryScreen() {
             </View>
 
             <View style={styles.body}>
-              {next ? (
+              {next && canEdit ? (
                 <View style={styles.upcoming}>
                   <View style={styles.upcomingTop}>
                     <View style={styles.upcomingBadge}>

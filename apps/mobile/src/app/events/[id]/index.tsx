@@ -13,7 +13,7 @@ import { getDb } from '@/db/client';
 import { deleteEntry, getEventEntries, getEventModeTotals, getEventSummary } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
 import { formatDate } from '@/lib/format';
-import { useLedgerContext } from '@/store/session';
+import { useCanEdit, useLedgerContext } from '@/store/session';
 import { colors, radius, space } from '@/theme';
 
 export default function EventDetailScreen() {
@@ -21,6 +21,7 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const ctx = useLedgerContext();
+  const canEdit = useCanEdit();
   const [fn, setFn] = useState<string | null>(null);
 
   const event = useDbQuery(() => getEventSummary(getDb(), ctx.familyId, id), ['events', 'entries', 'people'], [id, ctx.familyId]);
@@ -102,7 +103,7 @@ export default function EventDetailScreen() {
       </SafeAreaView>
 
       <View style={styles.toolbar}>
-        {hosted ? (
+        {hosted && canEdit ? (
           <Button
             label={t('eventDetail.countCash')}
             icon="layers"
@@ -161,7 +162,7 @@ export default function EventDetailScreen() {
             <EntryRow
               item={item}
               onPress={() => router.push({ pathname: '/people/[id]', params: { id: item.personId } })}
-              onLongPress={() => entryActions(item.id, item.personName, item.mode === 'item' && !item.amount ? t('mode.item') : formatINR(item.amount))}
+              onLongPress={!canEdit ? undefined : () => entryActions(item.id, item.personName, item.mode === 'item' && !item.amount ? t('mode.item') : formatINR(item.amount))}
             />
           </View>
         )}
@@ -175,6 +176,7 @@ export default function EventDetailScreen() {
         ListEmptyComponent={<EmptyState icon="gift" title={t('eventDetail.emptyTitle')} body={t('eventDetail.emptyBody')} />}
       />
 
+      {canEdit ? (
       <SafeAreaView edges={['bottom']} style={styles.footer}>
         <Pressable
           accessibilityRole="button"
@@ -188,6 +190,7 @@ export default function EventDetailScreen() {
           </AppText>
         </Pressable>
       </SafeAreaView>
+      ) : null}
     </View>
   );
 }

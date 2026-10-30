@@ -13,14 +13,15 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import migrations from '../../drizzle/migrations';
 import { AppText } from '@/components/AppText';
 import { getDb, prepareDatabase } from '@/db/client';
-import { loadLocalSetup } from '@/db/ledger';
-import { newId, useSession } from '@/store/session';
+import { startSession, syncAccount } from '@/lib/account';
+import { useSession } from '@/store/session';
 import { colors, space } from '@/theme';
 
 void SplashScreen.preventAutoHideAsync();
@@ -49,17 +50,24 @@ function App() {
     RozhaOne_400Regular,
   });
   const migration = useMigrations(getDb(), migrations);
+  const authStatus = useSession((s) => s.authStatus);
   const deviceId = useSession((s) => s.deviceId);
   const family = useSession((s) => s.family);
-  const setSetup = useSession((s) => s.setSetup);
 
   useEffect(() => {
-    if (!migration.success) return;
-    const setup = loadLocalSetup(getDb(), newId);
-    setSetup(setup.deviceId, setup.family);
-  }, [migration.success, setSetup]);
+    if (migration.success) void startSession();
+  }, [migration.success]);
 
-  const ready = (fontsLoaded || !!fontError) && deviceId !== null;
+  // Pick up ledgers joined, renamed or left on other phones whenever the app comes back.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void syncAccount();
+    });
+    return () => sub.remove();
+  }, []);
+
+  const signedIn = authStatus === 'signedIn';
+  const ready = (fontsLoaded || !!fontError) && deviceId !== null && authStatus !== 'loading';
   useEffect(() => {
     if (ready || migration.error) void SplashScreen.hideAsync();
   }, [ready, migration.error]);
@@ -71,7 +79,7 @@ function App() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}>
-        <Stack.Protected guard={family !== null}>
+        <Stack.Protected guard={signedIn && family !== null}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="events/new" />
           <Stack.Screen name="events/[id]/index" />
@@ -80,9 +88,15 @@ function App() {
           <Stack.Screen name="people/[id]/index" />
           <Stack.Screen name="people/[id]/edit" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="scan-invite" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="family/index" />
+          <Stack.Screen name="family/switch" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="family/add" />
         </Stack.Protected>
-        <Stack.Protected guard={family === null}>
+        <Stack.Protected guard={signedIn && family === null}>
           <Stack.Screen name="setup" />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="sign-in" />
         </Stack.Protected>
       </Stack>
     </SafeAreaProvider>

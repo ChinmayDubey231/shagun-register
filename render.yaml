@@ -1,0 +1,23 @@
+# Render Blueprint for the API. In Render: New → Blueprint → pick this repo.
+# Secrets marked sync:false are entered in the dashboard, never committed.
+services:
+  - type: web
+    name: shagun-register-api
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: .
+    buildCommand: npm ci --workspace apps/api --workspace packages/shared --omit=dev
+    startCommand: npm --workspace apps/api run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: MONGODB_URI
+        sync: false
+      - key: GOOGLE_CLIENT_IDS
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true

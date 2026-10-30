@@ -116,13 +116,22 @@ export const outbox = sqliteTable(
   (t) => [index('outbox_record_idx').on(t.recordId)],
 );
 
-/** Phone-only: sync position per family ledger. Also holds the ledger name for display. */
+/**
+ * Phone-only: one row per family ledger on this phone, with its sync position.
+ * `userId` scopes ledgers to the account that signed in; ledgers made before
+ * sign-in existed (weeks 1–2) have null and are claimed by the first account.
+ */
 export const syncMeta = sqliteTable('sync_meta', {
   familyId: text('family_id').primaryKey(),
   familyName: text('family_name').notNull(),
   lastPulledSeq: integer('last_pulled_seq').notNull().default(0),
   lastSyncAt: integer('last_sync_at'),
+  userId: text('user_id'),
+  role: text('role').$type<'owner' | 'editor' | 'viewer'>().notNull().default('owner'),
+  /** When the server accepted this ledger (POST /families). Null = still to register. */
+  registeredAt: integer('registered_at'),
 });
+export type SyncMetaRow = typeof syncMeta.$inferSelect;
 
 /** Phone-only key/value settings: device id, current family, language. */
 export const appSettings = sqliteTable('app_settings', {

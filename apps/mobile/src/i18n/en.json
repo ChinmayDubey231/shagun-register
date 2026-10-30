@@ -67,14 +67,21 @@
     "mausi_ji": "Mausi ji"
   },
   "setup": {
-    "greeting": "Namaste",
+    "greeting": "Namaste, {{name}}",
     "title": "Set up your family ledger",
-    "body": "One ledger per family. Every gift you give and receive goes into the same register.",
+    "body": "One ledger per family. Everyone you invite sees and adds to the same register.",
+    "createTitle": "Start a new ledger",
     "nameLabel": "Ledger name",
     "namePlaceholder": "e.g. Dubey parivaar",
-    "nameHint": "You can rename it later.",
+    "nameHint": "You'll be the owner. You can rename it later.",
     "create": "Create ledger",
-    "localNote": "Everything is saved on this phone and works without signal. Signing in and sharing the ledger with family come in the next build."
+    "or": "or",
+    "joinTitle": "Join with an invite code",
+    "codeLabel": "6-character code",
+    "codeHint": "Ask the ledger owner for a code. Codes expire 48 hours after they're made.",
+    "join": "Join family",
+    "joined": "Joined {{name}}. Its gifts will appear once sync arrives.",
+    "addTitle": "Add a ledger"
   },
   "home": {
     "search": "Search people or events",
@@ -222,8 +229,13 @@
     "ledger": "Family ledger",
     "onPhone": "Saved on this phone",
     "comingNext": "Coming in later builds",
-    "comingNextBody": "Sign-in and family members, sync across phones, duplicate merging, invite-card scanning, PDF and Excel export, Hindi, and app lock.",
-    "version": "Version {{version}}"
+    "comingNextBody": "Sync across phones, duplicate merging, invite-card scanning, PDF and Excel export, Hindi, and app lock.",
+    "version": "Version {{version}}",
+    "account": "Account",
+    "signOut": "Sign out",
+    "signOutConfirm": "Sign out on this phone? Your ledgers stay here and return when you sign in again.",
+    "members": "Family members",
+    "switch": "Switch or add ledger"
   },
   "later": {
     "title": "Not built yet",
@@ -241,7 +253,9 @@
     "name": "Give the ledger a name",
     "pickPerson": "More than one person has this name. Pick one from the list.",
     "generic": "That didn't save. Check the form and try again.",
-    "displayName": "Enter a name"
+    "displayName": "Enter a name",
+    "role": "Viewers can't change the ledger",
+    "code": "Enter the 6-character code"
   },
   "cash": {
     "title": "Count the cash",
@@ -261,5 +275,70 @@
     "empty": "No cash gifts logged for this event yet",
     "save": "Save this count",
     "keptNote": "Every count is kept for the family's record"
+  },
+  "signIn": {
+    "tagline": "Every shagun your family gives and receives, in one ledger that works even without signal.",
+    "f1": "Works offline at the venue",
+    "f2": "Shared across your family's phones",
+    "f3": "Full give-and-take history with any family",
+    "google": "Continue with Google",
+    "googleMissing": "Google sign-in isn't set up in this build. Use a development build with EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.",
+    "contactsNote": "We'll ask for contacts only when you first search them.",
+    "devTitle": "Developer sign-in",
+    "devHint": "Only for testing with a local server (DEV_LOGIN=true).",
+    "devName": "Name",
+    "devEmail": "Email",
+    "devButton": "Sign in for testing",
+    "needsInternet": "Signing in needs the internet once. After that the app works offline."
+  },
+  "family": {
+    "title": "Family members",
+    "membersCount_one": "{{name}} · {{count}} member",
+    "membersCount_other": "{{name}} · {{count}} members",
+    "inviteTitle": "Invite someone",
+    "roleEditor": "Editor",
+    "roleEditorHint": "Can add gifts",
+    "roleViewer": "Viewer",
+    "roleViewerHint": "Can only look",
+    "roleOwner": "Owner",
+    "makeCode": "Make invite code",
+    "codeLabel": "{{role}} invite code",
+    "expires": "Expires {{when}}",
+    "share": "Share invite",
+    "shareMessage": "Join our family gift ledger “{{name}}” on Shagun Register. Open the app and enter code {{code}} (valid for 48 hours).",
+    "cancelInvite": "Cancel this code",
+    "members": "Members",
+    "you": "(you)",
+    "whoCanDoWhat": "Who can do what",
+    "ownerCan": "Owner · everything, including invites and roles",
+    "editorCan": "Editor · add and edit gifts, people, events",
+    "viewerCan": "Viewer · see the ledger and export",
+    "makeEditor": "Make editor",
+    "makeViewer": "Make viewer",
+    "remove": "Remove from ledger",
+    "removeConfirm": "Remove {{name}}? They lose access to this ledger on every phone.",
+    "leave": "Leave this ledger",
+    "leaveConfirm": "Leave {{name}}? Its records are removed from this phone.",
+    "offline": "You're offline. Members and invites need the internet; the ledger itself still works.",
+    "notRegistered": "This ledger is saved on this phone but not on the server yet. Connect to the internet to invite family.",
+    "retry": "Try again",
+    "viewerNote": "You can see this ledger but not change it. Ask the owner to make you an editor."
+  },
+  "switcher": {
+    "title": "Your ledgers",
+    "switchA11y": "Switch family ledger",
+    "add": "Add or join another ledger",
+    "pending": "Not on the server yet"
+  },
+  "apiErrors": {
+    "NETWORK": "No internet connection. Try again when you're online.",
+    "NOT_CONFIGURED": "The app isn't connected to a server. Set EXPO_PUBLIC_API_URL.",
+    "INVITE_INVALID": "That code is wrong or has expired. Ask for a new one.",
+    "RATE_LIMITED": "Too many tries. Wait a few minutes and try again.",
+    "ROLE_FORBIDDEN": "Only the owner can do that.",
+    "OWNER_CANNOT_LEAVE": "The owner can't leave their own ledger.",
+    "UNAUTHENTICATED": "Please sign in again.",
+    "CONFLICT": "This ledger already exists on the server.",
+    "generic": "Something went wrong. Try again."
   }
 }

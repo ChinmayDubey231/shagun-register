@@ -13,7 +13,7 @@ import { getDb } from '@/db/client';
 import { countPendingChanges, getEventSummaries, getLastExchange, searchPeople, type EventSummary } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
 import { formatDate, todayISO } from '@/lib/format';
-import { useFamilyId, useSession } from '@/store/session';
+import { useCanEdit, useFamilyId, useSession } from '@/store/session';
 import { colors, directionColors, fonts, radius, space } from '@/theme';
 
 export default function HomeScreen() {
@@ -21,6 +21,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const familyId = useFamilyId();
   const familyName = useSession((s) => s.family?.name ?? '');
+  const canEdit = useCanEdit();
   const [query, setQuery] = useState('');
 
   const events = useDbQuery(() => getEventSummaries(getDb(), familyId), ['events', 'entries', 'people'], [familyId]);
@@ -47,9 +48,18 @@ export default function HomeScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.titleRow}>
-          <AppText variant="section" weight="extrabold" style={{ fontSize: 22, lineHeight: 30, flex: 1 }} numberOfLines={1} accessibilityRole="header">
-            {familyName}
-          </AppText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${familyName}. ${t('switcher.switchA11y')}`}
+            onPress={() => router.push('/family/switch')}
+            hitSlop={8}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          >
+            <AppText variant="section" weight="extrabold" style={{ fontSize: 22, lineHeight: 30, flexShrink: 1 }} numberOfLines={1} accessibilityRole="header">
+              {familyName}
+            </AppText>
+            <Feather name="chevron-down" size={20} color={colors.ink} />
+          </Pressable>
           <SyncPill pendingCount={pending} />
         </View>
         <View style={styles.search}>
@@ -82,6 +92,7 @@ export default function HomeScreen() {
           />
         ) : (
           <>
+            {canEdit ? (
             <View style={styles.actions}>
               <Pressable
                 accessibilityRole="button"
@@ -104,6 +115,7 @@ export default function HomeScreen() {
                 <AppText variant="rowTitle">{t('home.newEvent')}</AppText>
               </Pressable>
             </View>
+            ) : null}
 
             {events.length === 0 ? (
               <Card>
@@ -111,7 +123,7 @@ export default function HomeScreen() {
                   icon="book-open"
                   title={t('home.emptyTitle')}
                   body={t('home.emptyBody')}
-                  action={<Button label={t('home.newEvent')} icon="plus" onPress={() => router.push('/events/new')} style={{ alignSelf: 'stretch', marginTop: space.md }} />}
+                  action={canEdit ? <Button label={t('home.newEvent')} icon="plus" onPress={() => router.push('/events/new')} style={{ alignSelf: 'stretch', marginTop: space.md }} /> : undefined}
                 />
               </Card>
             ) : null}

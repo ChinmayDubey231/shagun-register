@@ -13,7 +13,7 @@ import { getDb } from '@/db/client';
 import { getEventSummaries } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
 import { todayISO } from '@/lib/format';
-import { useFamilyId } from '@/store/session';
+import { useCanEdit, useFamilyId } from '@/store/session';
 import { colors, radius, space } from '@/theme';
 
 type Filter = 'all' | 'received' | 'given';
@@ -22,6 +22,7 @@ export default function EventsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const familyId = useFamilyId();
+  const canEdit = useCanEdit();
   const [filter, setFilter] = useState<Filter>('all');
   const events = useDbQuery(() => getEventSummaries(getDb(), familyId), ['events', 'entries', 'people'], [familyId]);
   const today = todayISO();
@@ -80,11 +81,11 @@ export default function EventsScreen() {
             icon="calendar"
             title={t('events.emptyTitle')}
             body={t('events.emptyBody')}
-            action={<Button label={t('home.newEvent')} icon="plus" onPress={() => router.push('/events/new')} style={{ alignSelf: 'stretch', marginTop: space.md }} />}
+            action={canEdit ? <Button label={t('home.newEvent')} icon="plus" onPress={() => router.push('/events/new')} style={{ alignSelf: 'stretch', marginTop: space.md }} /> : undefined}
           />
         }
       />
-      {events.length > 0 ? (
+      {events.length > 0 && canEdit ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('home.newEvent')}

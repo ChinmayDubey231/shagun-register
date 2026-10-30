@@ -41,7 +41,8 @@
         {
           "contactsPermission": "Shagun Register uses your contacts to suggest names when you log a gift. Contacts are not uploaded."
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }

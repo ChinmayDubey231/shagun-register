@@ -13,6 +13,12 @@ import { matchKey, sumAmounts } from '@shagun/shared';
 import { eq } from 'drizzle-orm';
 import {
   addCashCount,
+  addJoinedFamily,
+  applyServerFamilies,
+  createPerson,
+  listLocalFamilies,
+  markFamilyRegistered,
+  unregisteredFamilies,
   addEntry,
   countPendingChanges,
   findSameName,
@@ -57,8 +63,8 @@ const outboxRows = () => db.select().from(schema.outbox).all();
 
 beforeEach(() => {
   db = freshDb();
-  const setup = loadLocalSetup(db, randomUUID);
-  const family = createLocalFamily(db, 'Dubey parivaar', randomUUID);
+  const family = createLocalFamily(db, 'Dubey parivaar', randomUUID, 'local');
+  const setup = loadLocalSetup(db, randomUUID, 'local');
   ctx = {
     db,
     familyId: family.id,
@@ -97,14 +103,14 @@ const gift = (eventId: string, over: Record<string, unknown> = {}) => ({
 
 describe('local setup', () => {
   it('creates a device id once and remembers the family', () => {
-    const again = loadLocalSetup(db, randomUUID);
+    const again = loadLocalSetup(db, randomUUID, 'local');
     expect(again.deviceId).toBe(ctx.deviceId);
-    expect(again.family).toEqual({ id: ctx.familyId, name: 'Dubey parivaar' });
+    expect(again.family).toEqual({ id: ctx.familyId, name: 'Dubey parivaar', role: 'owner', registered: false });
   });
 
   it('starts with no family on a new phone', () => {
     const empty = freshDb();
-    expect(loadLocalSetup(empty, randomUUID).family).toBeNull();
+    expect(loadLocalSetup(empty, randomUUID, 'someone').family).toBeNull();
   });
 });
 
@@ -359,5 +365,66 @@ describe('Week 2: fixing an entry', () => {
 
     deleteEntry(ctx, entry.id);
     expect(() => updateEntry(ctx, entry.id, gift(event.id, { personId: person.id }))).toThrow('no longer in the ledger');
+  });
+});
+
+describe('Week 3: accounts on this phone', () => {
+  it('claims ledgers made before sign-in for the first account, and scopes ledgers per account', () => {
+    const fresh = freshDb();
+    const before = createLocalFamily(fresh, 'Dubey parivaar', randomUUID);
+    expect(loadLocalSetup(fresh, randomUUID, null).family).toBeNull();
+
+    const chinmay = loadLocalSetup(fresh, randomUUID, 'user-chinmay');
+    expect(chinmay.family).toEqual({ id: before.id, name: 'Dubey parivaar', role: 'owner', registered: false });
+
+    // Someone else signs in on the same phone: they don't see Chinmay's ledger.
+    expect(loadLocalSetup(fresh, randomUUID, 'user-other').family).toBeNull();
+    expect(listLocalFamilies(fresh, 'user-other')).toEqual([]);
+    expect(unregisteredFamilies(fresh, 'user-chinmay').map((f) => f.id)).toEqual([before.id]);
+    markFamilyRegistered(fresh, before.id, 1);
+    expect(unregisteredFamilies(fresh, 'user-chinmay')).toEqual([]);
+  });
+
+  it('adds a joined ledger, follows server role changes, and forgets ledgers the account was removed from', () => {
+    const fresh = freshDb();
+    const mine = createLocalFamily(fresh, 'Dubey parivaar', randomUUID, 'u1');
+    markFamilyRegistered(fresh, mine.id, 1);
+    const joined = addJoinedFamily(fresh, { id: randomUUID(), name: 'Verma parivaar', role: 'editor' }, 'u1', 2);
+    expect(loadLocalSetup(fresh, randomUUID, 'u1').family?.id).toBe(joined.id);
+
+    // A record in the joined ledger, plus one queued change for it.
+    const jctx = { db: fresh, familyId: joined.id, deviceId: 'd', userId: 'u1', role: 'editor' as const, newId: randomUUID, now: () => ++clock };
+    createPerson(jctx, { displayName: 'Sakshi' });
+
+    applyServerFamilies(fresh, 'u1', [
+      { id: mine.id, name: 'Dubey family', role: 'owner' },
+      { id: joined.id, name: 'Verma parivaar', role: 'viewer' },
+    ], 3);
+    expect(listLocalFamilies(fresh, 'u1').map((f) => [f.name, f.role])).toEqual([
+      ['Dubey family', 'owner'],
+      ['Verma parivaar', 'viewer'],
+    ]);
+
+    // Removed from the Verma ledger: its local data goes too.
+    applyServerFamilies(fresh, 'u1', [{ id: mine.id, name: 'Dubey family', role: 'owner' }], 4);
+    expect(listLocalFamilies(fresh, 'u1').map((f) => f.id)).toEqual([mine.id]);
+    expect(fresh.select().from(schema.people).all()).toHaveLength(0);
+    expect(fresh.select().from(schema.outbox).all()).toHaveLength(0);
+    expect(loadLocalSetup(fresh, randomUUID, 'u1').family?.id).toBe(mine.id);
+  });
+
+  it('keeps an unregistered ledger even if the server does not know it yet', () => {
+    const fresh = freshDb();
+    const offline = createLocalFamily(fresh, 'Made offline', randomUUID, 'u1');
+    applyServerFamilies(fresh, 'u1', [], 1);
+    expect(listLocalFamilies(fresh, 'u1').map((f) => f.id)).toEqual([offline.id]);
+  });
+
+  it('refuses writes from a viewer', () => {
+    const viewer = { ...ctx, role: 'viewer' as const };
+    const event = hostedWedding();
+    expect(() => addEntry(viewer, gift(event.id, { newPersonName: 'X' }))).toThrow(LedgerError);
+    expect(() => createPerson(viewer, { displayName: 'X' })).toThrow('Viewers');
+    expect(getEventSummary(db, ctx.familyId, event.id)!.entryCount).toBe(0);
   });
 });
