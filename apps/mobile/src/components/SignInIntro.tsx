@@ -147,11 +147,16 @@ export function InkReveal({
 }) {
   const v = useProgress(delay, 600, IN_OUT);
   const [width, setWidth] = useState(0);
-  const onLayout = (e: LayoutChangeEvent) =>
-    setWidth(Math.ceil(e.nativeEvent.layout.width) + 2);
+  // The box hugs the text, and Android rounds that width down a fraction of a pixel, which
+  // wraps the last word onto a clipped second line. Holding the box at the rounded-up width
+  // gives the text room; it only grows again if the text itself gets wider.
+  const onLayout = (e: LayoutChangeEvent) => {
+    const measured = e.nativeEvent.layout.width;
+    setWidth((w) => (measured > w ? Math.ceil(measured) + 2 : w));
+  };
   return (
     <View
-      style={{ alignSelf: "flex-start", overflow: "hidden" }}
+      style={{ alignSelf: "flex-start", overflow: "hidden", minWidth: width }}
       onLayout={onLayout}
     >
       {children}
