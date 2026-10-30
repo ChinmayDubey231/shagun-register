@@ -15,8 +15,10 @@ import { useDbQuery } from '@/db/useDbQuery';
 import { formatDate, todayISO } from '@/lib/format';
 import { useCanEdit, useFamilyId, useSession } from '@/store/session';
 import { colors, directionColors, fonts, radius, space } from '@/theme';
+import { useSyncRefresh } from '@/lib/useSyncRefresh';
 
 export default function HomeScreen() {
+  const refreshControl = useSyncRefresh();
   const { t } = useTranslation();
   const router = useRouter();
   const familyId = useFamilyId();
@@ -81,7 +83,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <ScrollView style={{ backgroundColor: colors.ground }} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ backgroundColor: colors.ground }} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" refreshControl={refreshControl}>
         {searching ? (
           <SearchResults
             query={query}

@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import { formatINR } from '@shagun/shared';
 import { useTranslation } from 'react-i18next';
+import { useSyncStatus } from '@/lib/sync';
 import { Pressable, StyleSheet, View } from 'react-native';
 import type { EntryListItem, EventSummary } from '@/db/ledger';
 import { dateBadgeParts, formatDate, formatTime, initials, todayISO } from '@/lib/format';
@@ -77,19 +78,34 @@ export function SyncMark({ pending }: { pending: boolean }) {
   );
 }
 
-/** Header pill: how many local changes are waiting for the server. */
+/**
+ * Header pill. Saving never waits for the network, so the pill only says where the
+ * changes are: going up now, waiting on this phone, or all on the server.
+ */
 export function SyncPill({ pendingCount }: { pendingCount: number }) {
   const { t } = useTranslation();
+  const state = useSyncStatus((s) => s.state);
   const waiting = pendingCount > 0;
+  const syncing = state === 'syncing' && waiting;
+  const offline = state === 'offline' && waiting;
+  const icon = syncing ? 'refresh-cw' : offline ? 'wifi-off' : waiting ? 'smartphone' : 'check';
+  const label = syncing
+    ? t('sync.syncing')
+    : offline
+      ? t('sync.offlineShort', { count: pendingCount })
+      : waiting
+        ? t('sync.pendingShort', { count: pendingCount })
+        : t('sync.allSaved');
+  const long = syncing ? t('sync.syncing') : waiting ? t('sync.pendingLong', { count: pendingCount }) : t('sync.allSaved');
   return (
     <View
       accessibilityRole="text"
-      accessibilityLabel={waiting ? t('sync.pendingLong', { count: pendingCount }) : t('sync.allSaved')}
+      accessibilityLabel={long}
       style={[styles.pill, { backgroundColor: waiting ? colors.marigoldTint : colors.successTint }]}
     >
-      <Feather name={waiting ? 'smartphone' : 'check'} size={14} color={waiting ? colors.marigoldInk : colors.success} />
+      <Feather name={icon} size={14} color={waiting ? colors.marigoldInk : colors.success} />
       <AppText variant="tiny" color={waiting ? colors.marigoldInk : colors.success} style={{ fontSize: 13 }}>
-        {waiting ? t('sync.pendingShort', { count: pendingCount }) : t('sync.allSaved')}
+        {label}
       </AppText>
     </View>
   );

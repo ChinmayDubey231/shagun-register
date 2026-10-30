@@ -7,6 +7,7 @@ import { createApp, type AppOptions } from '../src/app.js';
 import type { GoogleVerifier } from '../src/auth/google.js';
 import { AppError } from '../src/errors.js';
 import { syncIndexes } from '../src/models.js';
+import { ensureSyncIndexes } from '../src/sync.js';
 
 export const SECRET = 'test-secret-that-is-at-least-32-characters-long';
 
@@ -29,6 +30,7 @@ export function useDatabase() {
     rs = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
     await mongoose.connect(rs.getUri());
     await syncIndexes();
+    await ensureSyncIndexes();
   }, 120_000);
   beforeEach(async () => {
     const db = mongoose.connection.db!;

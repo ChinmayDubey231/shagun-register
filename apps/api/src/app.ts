@@ -4,6 +4,7 @@ import { AppError, errorBody } from './errors.js';
 import { cors } from './middleware.js';
 import { authRoutes } from './routes/auth.js';
 import { familyRoutes } from './routes/families.js';
+import { syncRoutes } from './routes/sync.js';
 
 export interface AppOptions {
   accessSecret: string;
@@ -18,7 +19,6 @@ export interface AppOptions {
 
 /**
  * Builds the Express app without listening, so tests can drive it with supertest.
- * Week 4 adds /sync/push and /sync/pull.
  */
 export function createApp(opts: AppOptions) {
   const app = express();
@@ -26,7 +26,7 @@ export function createApp(opts: AppOptions) {
   // Render (and most hosts) sit behind one proxy; needed for per-IP rate limits.
   app.set('trust proxy', 1);
   app.use(cors(opts.corsOrigins ?? []));
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '2mb' }));
 
   if (opts.log) {
     const log = opts.log;
@@ -44,6 +44,7 @@ export function createApp(opts: AppOptions) {
   const rateLimits = opts.rateLimits ?? true;
   app.use(authRoutes({ accessSecret: opts.accessSecret, verifyGoogle: opts.verifyGoogle, devLogin: !!opts.devLogin, rateLimits }));
   app.use(familyRoutes({ accessSecret: opts.accessSecret, rateLimits }));
+  app.use(syncRoutes({ accessSecret: opts.accessSecret }));
 
   const notFound: RequestHandler = (req, _res, next) => {
     next(new AppError(404, 'NOT_FOUND', `No route for ${req.method} ${req.path}`));

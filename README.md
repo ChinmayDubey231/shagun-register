@@ -2,9 +2,38 @@
 
 A private family ledger for wedding and function gifts: log what you receive and give, work offline at the venue, and look up the full give-and-take history with any family.
 
-React Native (Expo SDK 58) · Node.js + Express · MongoDB (from week 3) · TypeScript throughout.
+React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript throughout.
 
-## Status: Week 3 done (backend and accounts)
+## Status: Week 4 done (sync)
+
+**Week 4 is done when** two phones log entries offline at the same time and both end up with every entry. Three checks prove it:
+- **Two-phone integration test** (`apps/mobile/src/sync/sync.integration.test.ts`). Two real SQLite databases run the app's own ledger and sync code against the real API on a real MongoDB replica set. It automates the guide's manual offline test:
+  - Both phones go offline and log 10 gifts each. Then one edits a gift the other logged, and the other deletes a different one.
+  - They come back online in either order. Both end with 19 live entries, the edit and the delete, and identical totals.
+  - Also covered: a push whose reply is lost (retried without doubling or new sequence numbers), a pull cut off between pages (resumes), a local change made during a pull (kept, then pushed), an edit racing a delete (the delete wins on both phones), and a change the server refuses (parked, not retried forever).
+- **Sync API tests** (`apps/api/test/sync.test.ts`): sequence order and paging, roles, safe retries, last-write-wins with history, deletes winning, partial rejection, cross-family id hijack refused, and two concurrent pushes getting gap-free sequence numbers 1–40.
+- **A two-phone browser run.** Both phones lose the server and log gifts (3 and 4). Each shows "N waiting" and an offline pill. Coming back online syncs by itself. Both end with all 7, and a correction made on one phone shows on the other. All 13 checks pass.
+
+### Week 4
+
+- **API** (`apps/api/src/sync.ts`, `routes/sync.ts`):
+  - **`POST /sync/push`** takes up to 100 outbox changes. Each record is validated on its own, so one bad record doesn't sink the batch. Every write takes the family's next sequence number (`families.lastSeq`, `$inc`) in the same MongoDB transaction as the write. A pull therefore can never see seq 11 while seq 10 is still uncommitted.
+  - **`GET /sync/pull?since=`** returns records above `since` across all four tables in seq order, up to 500 a page with `hasMore`. The phone's clock is never used for ordering.
+  - **Conflict rules:**
+    - New records never conflict (UUIDs made on the phone).
+    - For edits, the last write to reach the server wins, and the replaced version of an entry goes to `entryHistory` (`GET /families/:id/entries/:entryId/history`).
+    - Deletes are soft and win over later edits.
+    - An identical retry changes nothing and gets no new seq.
+  - **The server doesn't trust the phone** for the person match key (recomputed) or for who logged a gift (`createdBy` comes from the token).
+- **Phone** (`apps/mobile/src/sync/engine.ts`, `src/lib/sync.ts`):
+  - **Push, then pull.** Accepted outbox rows are deleted. Refused ones are parked with the reason and shown on More as "not accepted by the server". The server's canonical copy is written back at once, so a late edit to a deleted gift corrects itself.
+  - **Pull** upserts each record unless it still has a pending local change, and saves `lastPulledSeq` in the same SQLite transaction. Interrupting it at any point loses and doubles nothing.
+  - **Triggers:** startup and sign-in, back to the foreground, connection back, 5 s after a save (so a burst of gifts goes up as one batch), pull-to-refresh on every list, and *Sync now* on More. There is one sync at a time; a request mid-sync runs once more straight after.
+  - **"Online" means our server answers:** NetInfo checks `/health` instead of a Google URL, and the phone retries every 30 s while the last attempt failed.
+  - **Status:** the header pill reads *Syncing…*, *N on phone* (offline), *N to sync* or *All saved*. A gift to a new guest counts as one change, not two. More shows when it last synced and any refused changes.
+  - **Role lost while offline:** if this account became a viewer, its queued changes are parked rather than retried, and pulling continues.
+
+### Week 3
 
 **Week 3 is done when** two family members can join the same ledger. Two checks prove it:
 - **API tests** (`apps/api/test/accounts.test.ts`) run against a real MongoDB replica set.
@@ -77,8 +106,11 @@ apps/
     src/components/
     src/i18n/      en.json now; hi.json in week 6
     drizzle/       Generated SQL migrations
-  api/             Express 5 + Mongoose: auth, families, invites, roles (sync in week 4)
-    src/routes/    auth.ts (Google, refresh, /me), families.ts (families, invites, members)
+    src/sync/      Sync engine (push/pull, no Expo imports) + two-phone integration test
+    src/lib/       API client, account, sync triggers
+  api/             Express 5 + Mongoose: auth, families, invites, roles, sync
+    src/sync.ts    Push/pull, sequence numbers, conflict rules, entry history
+    src/routes/    auth.ts (Google, refresh, /me), families.ts (families, invites, members), sync.ts
     test/          supertest + mongodb-memory-server (real replica set)
 packages/
   shared/          zod schemas, API contract, match key, rupee formatting — used by phone and server
@@ -132,11 +164,8 @@ npm run typecheck
 - **The match key lives in `packages/shared`**, so the phone's search and the server's duplicate check (week 5) always compute identical keys. Merges are only ever suggested, never automatic.
 - **Name matching uses a custom transliterator, not a Sanskrit library.** Sanskrit schemes keep every inherent vowel (कमला → kamalā), which never matches how Hindi names are typed. The custom transliterator applies Hindi schwa deletion instead.
 
-## Next: Week 4 (sync)
+## Next: Week 5 (merge, OCR, exports)
 
-1. `/sync/push`: upserts by `_id`, role checks, zod validation. The family sequence counter and the write go in one MongoDB transaction.
-2. `/sync/pull` with paging by `seq`.
-3. Sync triggers on the phone (foreground, back online, 5 s after saves, pull-to-refresh) and a real sync status.
-4. `entryHistory`, soft deletes winning over edits, and the other conflict rules.
-
-**Done when** two phones log entries offline at the same time and both end up with every entry.
+1. **Duplicate merge:** suggestions from the shared match key, and a merge that moves entries and leaves `mergedInto` on the old person (synced like any other change).
+2. **Scan invite card:** on-device text recognition fills the new-event form.
+3. **Exports:** a PDF of an event's register and an Excel file of the whole ledger, shared from the phone.

@@ -147,8 +147,10 @@ describe('Week 1: 20 entries offline', () => {
     expect(byMode.cash!.count + byMode.upi!.count).toBe(20);
     expect(byMode.cash!.total + byMode.upi!.total).toBe(59_556);
 
-    // 1 event + 15 people + 20 entries, each with its own outbox row.
-    expect(countPendingChanges(db)).toBe(36);
+    // 1 event + 15 people + 20 entries, each with its own outbox row…
+    expect(outboxRows()).toHaveLength(36);
+    // …but the phone shows 21 changes: each new guest rides along with their gift.
+    expect(countPendingChanges(db)).toBe(21);
     const list = getEventEntries(db, event.id);
     expect(list).toHaveLength(20);
     expect(list.every((e) => e.pending)).toBe(true);

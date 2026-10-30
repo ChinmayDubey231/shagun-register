@@ -15,10 +15,12 @@ import { useDbQuery } from '@/db/useDbQuery';
 import { todayISO } from '@/lib/format';
 import { useCanEdit, useFamilyId } from '@/store/session';
 import { colors, radius, space } from '@/theme';
+import { useSyncRefresh } from '@/lib/useSyncRefresh';
 
 type Filter = 'all' | 'received' | 'given';
 
 export default function EventsScreen() {
+  const refreshControl = useSyncRefresh();
   const { t } = useTranslation();
   const router = useRouter();
   const familyId = useFamilyId();
@@ -57,6 +59,7 @@ export default function EventsScreen() {
         />
       </View>
       <SectionList
+        refreshControl={refreshControl}
         style={{ backgroundColor: colors.ground }}
         contentContainerStyle={styles.list}
         sections={sections}

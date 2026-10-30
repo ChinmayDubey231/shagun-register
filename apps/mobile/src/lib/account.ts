@@ -21,7 +21,7 @@ export async function startSession() {
   const user = await restoreAuth();
   useSession.getState().setUser(user);
   reloadLedgers();
-  if (user) void syncAccount();
+  // The root layout starts the first sync once the session is set (see lib/sync.ts).
 }
 
 async function finishSignIn(res: AuthResponse) {

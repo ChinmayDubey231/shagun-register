@@ -13,14 +13,14 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { AppState } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import migrations from '../../drizzle/migrations';
 import { AppText } from '@/components/AppText';
 import { getDb, prepareDatabase } from '@/db/client';
-import { startSession, syncAccount } from '@/lib/account';
+import { SyncDriver } from '@/components/SyncDriver';
+import { startSession } from '@/lib/account';
 import { useSession } from '@/store/session';
 import { colors, space } from '@/theme';
 
@@ -58,14 +58,6 @@ function App() {
     if (migration.success) void startSession();
   }, [migration.success]);
 
-  // Pick up ledgers joined, renamed or left on other phones whenever the app comes back.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void syncAccount();
-    });
-    return () => sub.remove();
-  }, []);
-
   const signedIn = authStatus === 'signedIn';
   const ready = (fontsLoaded || !!fontError) && deviceId !== null && authStatus !== 'loading';
   useEffect(() => {
@@ -78,6 +70,7 @@ function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
+      <SyncDriver />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}>
         <Stack.Protected guard={signedIn && family !== null}>
           <Stack.Screen name="(tabs)" />

@@ -10,10 +10,13 @@ import { Card, Divider, ListGroup } from '@/components/layout';
 import { Avatar, SyncPill } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { countPendingChanges } from '@/db/ledger';
+import { syncNow, useSyncStatus } from '@/lib/sync';
+import { useSyncRefresh } from '@/lib/useSyncRefresh';
+import { countRejected } from '@/sync/engine';
 import { useDbQuery } from '@/db/useDbQuery';
 import { signOut } from '@/lib/account';
 import { useSession } from '@/store/session';
-import { colors, space } from '@/theme';
+import { colors, radius, space } from '@/theme';
 
 function Row({ icon, label, detail, onPress, danger }: {
   icon: ComponentProps<typeof Feather>['name'];
@@ -43,6 +46,11 @@ function Row({ icon, label, detail, onPress, danger }: {
   );
 }
 
+function ago(at: number, t: ReturnType<typeof useTranslation>['t']) {
+  const minutes = Math.floor((Date.now() - at) / 60_000);
+  return minutes < 1 ? t('sync.justNow') : t('sync.minutesAgo', { count: minutes });
+}
+
 /** Ledger, members, account. Export, language and app lock arrive in later weeks. */
 export default function MoreScreen() {
   const { t } = useTranslation();
@@ -51,6 +59,9 @@ export default function MoreScreen() {
   const families = useSession((s) => s.families);
   const user = useSession((s) => s.user);
   const pending = useDbQuery(() => countPendingChanges(getDb()), ['outbox'], []);
+  const rejected = useDbQuery(() => countRejected(getDb()), ['outbox'], []);
+  const sync = useSyncStatus();
+  const refreshControl = useSyncRefresh();
   const roleLabel = { owner: t('family.roleOwner'), editor: t('family.roleEditor'), viewer: t('family.roleViewer') };
 
   const confirmSignOut = () =>
@@ -66,7 +77,7 @@ export default function MoreScreen() {
           {t('more.title')}
         </AppText>
       </View>
-      <ScrollView style={{ backgroundColor: colors.ground }} contentContainerStyle={styles.body}>
+      <ScrollView style={{ backgroundColor: colors.ground }} contentContainerStyle={styles.body} refreshControl={refreshControl}>
         <Card style={{ gap: space.md }}>
           <AppText variant="label" color={colors.inkMuted}>
             {t('more.ledger')}
@@ -89,6 +100,43 @@ export default function MoreScreen() {
               {t('sync.pendingLong', { count: pending })}
             </AppText>
           ) : null}
+          {sync.state === 'offline' && pending > 0 ? (
+            <AppText variant="meta" color={colors.inkMuted}>
+              {t('sync.offline')}
+            </AppText>
+          ) : null}
+          {sync.state === 'error' && sync.lastError ? (
+            <AppText variant="meta" color={colors.danger}>
+              {t('sync.error', { message: sync.lastError })}
+            </AppText>
+          ) : null}
+          {rejected > 0 ? (
+            <View style={{ gap: 2 }}>
+              <AppText variant="meta" weight="bold" color={colors.danger}>
+                {t('sync.rejected', { count: rejected })}
+              </AppText>
+              <AppText variant="caption" color={colors.inkMuted}>
+                {t('sync.rejectedHint')}
+              </AppText>
+            </View>
+          ) : null}
+          <View style={styles.syncRow}>
+            <AppText variant="caption" color={colors.inkMuted} style={{ flex: 1 }}>
+              {sync.lastSyncAt ? t('sync.lastSynced', { when: ago(sync.lastSyncAt, t) }) : t('sync.never')}
+            </AppText>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('sync.now')}
+              disabled={sync.state === 'syncing'}
+              onPress={() => void syncNow()}
+              style={({ pressed }) => [styles.syncNow, pressed && { opacity: 0.6 }]}
+            >
+              <Feather name="refresh-cw" size={14} color={colors.sindoor} />
+              <AppText variant="meta" weight="bold" color={colors.sindoor}>
+                {sync.state === 'syncing' ? t('sync.syncing') : t('sync.now')}
+              </AppText>
+            </Pressable>
+          </View>
         </Card>
 
         <ListGroup>
@@ -133,6 +181,8 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
+  syncRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line, paddingTop: space.md },
+  syncNow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.sindoorTint },
   header: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.md, borderBottomWidth: 1, borderBottomColor: colors.line },
   body: { padding: space.xl, gap: space.lg, paddingBottom: space.xxxl },
   ledgerRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },

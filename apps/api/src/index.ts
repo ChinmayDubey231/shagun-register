@@ -3,11 +3,13 @@ import { createApp } from './app.js';
 import { createGoogleVerifier } from './auth/google.js';
 import { loadConfig } from './config.js';
 import { syncIndexes } from './models.js';
+import { ensureSyncIndexes } from './sync.js';
 
 const config = loadConfig();
 
 await mongoose.connect(config.mongodbUri);
 await syncIndexes();
+await ensureSyncIndexes();
 
 const app = createApp({
   accessSecret: config.jwtAccessSecret,

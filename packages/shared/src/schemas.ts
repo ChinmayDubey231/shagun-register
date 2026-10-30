@@ -66,6 +66,8 @@ export const entrySchema = syncFieldsSchema
     photoKey: optionalText(200),
     createdBy: z.string().min(1).max(64),
     deviceId: z.string().min(1).max(64),
+    /** When the gift was logged (epoch ms). Unlike updatedAt, edits don't change it. */
+    createdAt: z.number().int().nonnegative(),
   })
   .refine((e) => e.mode === 'item' || e.amount > 0, {
     message: 'Amount must be more than zero unless the gift is an item',

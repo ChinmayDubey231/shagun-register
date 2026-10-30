@@ -695,8 +695,23 @@ export function getPersonHistory(db: LedgerDb, personId: string): PersonHistoryI
     .all();
 }
 
+/**
+ * Changes on this phone still waiting to go up, counted the way the family thinks of them:
+ * a gift to a new guest is one change, not two (the new person rides along with the entry).
+ * Refused changes are counted separately.
+ */
 export function countPendingChanges(db: LedgerDb): number {
-  return db.select({ n: sql<number>`count(*)` }).from(outbox).get()?.n ?? 0;
+  return (
+    db
+      .select({ n: sql<number>`count(distinct ${outbox.recordId})` })
+      .from(outbox)
+      .where(
+        sql`${outbox.lastError} is null and not (${outbox.tableName} = 'people' and exists (
+          select 1 from outbox e where e.table_name = 'entries' and e.last_error is null
+            and json_extract(e.payload, '$.personId') = ${outbox.recordId}))`,
+      )
+      .get()?.n ?? 0
+  );
 }
 
 export function updatePerson(ctx: LedgerContext, personId: string, raw: unknown): PersonRow {

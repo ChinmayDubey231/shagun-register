@@ -15,11 +15,13 @@ import { useDbQuery } from '@/db/useDbQuery';
 import { formatDate, formatMonthYear, todayISO } from '@/lib/format';
 import { useCanEdit, useFamilyId } from '@/store/session';
 import { colors, directionColors, radius, space } from '@/theme';
+import { useSyncRefresh } from '@/lib/useSyncRefresh';
 
 type Filter = 'all' | 'given' | 'received';
 
 /** Every gift both ways with one person or household: the reason the app exists. */
 export default function PersonHistoryScreen() {
+  const refreshControl = useSyncRefresh();
   const { t } = useTranslation();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -66,6 +68,7 @@ export default function PersonHistoryScreen() {
         }
       />
       <FlatList
+        refreshControl={refreshControl}
         style={{ backgroundColor: colors.ground }}
         data={shown}
         keyExtractor={(h) => h.id}

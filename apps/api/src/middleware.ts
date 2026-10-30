@@ -27,13 +27,17 @@ export function requireAuth(accessSecret: string): RequestHandler {
 const RANK: Record<MemberRole, number> = { viewer: 0, editor: 1, owner: 2 };
 
 /**
- * Loads the caller's membership in the family named by `req.params.id` and rejects
+ * Loads the caller's membership in the family (`req.params.id` unless told otherwise) and rejects
  * the request if their role is below `min`. Non-members get 404, not 403, so family
  * ids can't be probed.
  */
-export function requireRole(min: MemberRole, message?: string): RequestHandler {
+export function requireRole(
+  min: MemberRole,
+  message?: string,
+  familyIdOf: (req: Parameters<RequestHandler>[0]) => unknown = (req) => req.params.id,
+): RequestHandler {
   return async (req, _res, next) => {
-    const familyId = req.params.id;
+    const familyId = familyIdOf(req);
     if (typeof familyId !== 'string') return next(notFound('Family not found'));
     const [membership, family] = await Promise.all([
       Membership.findOne({ familyId, userId: req.userId }).lean<{ role: MemberRole }>(),

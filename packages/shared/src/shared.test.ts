@@ -79,6 +79,7 @@ describe('schemas', () => {
     photoKey: null,
     createdBy: 'local',
     deviceId: 'device-1',
+    createdAt: 1,
   };
   it('accepts a cash entry in whole rupees', () => {
     expect(entrySchema.safeParse({ ...base, amount: 2100, mode: 'cash' }).success).toBe(true);

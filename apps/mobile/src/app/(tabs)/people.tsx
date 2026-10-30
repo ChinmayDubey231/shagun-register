@@ -14,8 +14,10 @@ import { getPeopleSummaries } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
 import { useFamilyId } from '@/store/session';
 import { colors, fonts, radius, space } from '@/theme';
+import { useSyncRefresh } from '@/lib/useSyncRefresh';
 
 export default function PeopleScreen() {
+  const refreshControl = useSyncRefresh();
   const { t } = useTranslation();
   const router = useRouter();
   const familyId = useFamilyId();
@@ -73,6 +75,7 @@ export default function PeopleScreen() {
         ) : null}
       </View>
       <FlatList
+        refreshControl={refreshControl}
         style={{ backgroundColor: colors.ground }}
         contentContainerStyle={styles.list}
         data={shown}

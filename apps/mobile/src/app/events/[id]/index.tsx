@@ -15,8 +15,10 @@ import { useDbQuery } from '@/db/useDbQuery';
 import { formatDate } from '@/lib/format';
 import { useCanEdit, useLedgerContext } from '@/store/session';
 import { colors, radius, space } from '@/theme';
+import { useSyncRefresh } from '@/lib/useSyncRefresh';
 
 export default function EventDetailScreen() {
+  const refreshControl = useSyncRefresh();
   const { t } = useTranslation();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -137,6 +139,7 @@ export default function EventDetailScreen() {
       </View>
 
       <FlatList
+        refreshControl={refreshControl}
         data={list}
         keyExtractor={(e) => e.id}
         contentContainerStyle={styles.list}

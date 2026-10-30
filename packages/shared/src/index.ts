@@ -6,3 +6,4 @@ export * from './transliterate';
 export * from './matchKey';
 export * from './personSearch';
 export * from './api';
+export * from './sync';
