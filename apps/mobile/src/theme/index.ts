@@ -62,6 +62,8 @@ export const type = {
   meta: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   caption: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   tiny: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 16 },
+  /** Small-caps label over a heading, e.g. "FAMILY LEDGER". */
+  eyebrow: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14, letterSpacing: 1.2, textTransform: 'uppercase' },
 } as const;
 
 export type TypeVariant = keyof typeof type;

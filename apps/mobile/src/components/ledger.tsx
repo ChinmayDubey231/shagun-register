@@ -79,10 +79,10 @@ export function SyncMark({ pending }: { pending: boolean }) {
 }
 
 /**
- * Header pill. Saving never waits for the network, so the pill only says where the
- * changes are: going up now, waiting on this phone, or all on the server.
+ * Saving never waits for the network, so sync status only says where the changes are:
+ * going up now, waiting on this phone, or all on the server.
  */
-export function SyncPill({ pendingCount }: { pendingCount: number }) {
+function useSyncLabel(pendingCount: number) {
   const { t } = useTranslation();
   const state = useSyncStatus((s) => s.state);
   const waiting = pendingCount > 0;
@@ -97,6 +97,29 @@ export function SyncPill({ pendingCount }: { pendingCount: number }) {
         ? t('sync.pendingShort', { count: pendingCount })
         : t('sync.allSaved');
   const long = syncing ? t('sync.syncing') : waiting ? t('sync.pendingLong', { count: pendingCount }) : t('sync.allSaved');
+  return { waiting, icon, label, long } as const;
+}
+
+/**
+ * Home header status, set like the "Family ledger" label it faces: quiet once everything
+ * is on the server, marigold while changes wait on this phone.
+ */
+export function SyncStatus({ pendingCount }: { pendingCount: number }) {
+  const { waiting, icon, label, long } = useSyncLabel(pendingCount);
+  const color = waiting ? colors.marigoldInk : colors.success;
+  return (
+    <View accessibilityRole="text" accessibilityLabel={long} style={styles.status}>
+      <Feather name={icon} size={12} color={color} />
+      <AppText variant="eyebrow" color={color}>
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
+/** Pill version of the sync status, for list rows. */
+export function SyncPill({ pendingCount }: { pendingCount: number }) {
+  const { waiting, icon, label, long } = useSyncLabel(pendingCount);
   return (
     <View
       accessibilityRole="text"
@@ -208,6 +231,7 @@ const styles = StyleSheet.create({
   tile: { borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   dateBadge: { width: 50, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   syncMark: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  status: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

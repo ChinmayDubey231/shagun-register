@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
-import { Card, Divider, ListGroup } from '@/components/layout';
+import { Card, Divider, ListGroup, TabHeading } from '@/components/layout';
 import { Avatar, SyncPill } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { countPendingChanges } from '@/db/ledger';
@@ -73,9 +73,7 @@ export default function MoreScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
       <View style={styles.header}>
-        <AppText variant="title" accessibilityRole="header">
-          {t('more.title')}
-        </AppText>
+        <TabHeading title={t('more.title')} />
       </View>
       <ScrollView style={{ backgroundColor: colors.ground }} contentContainerStyle={styles.body} refreshControl={refreshControl}>
         <Card style={{ gap: space.md }}>

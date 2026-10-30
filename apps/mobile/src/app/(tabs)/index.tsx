@@ -7,7 +7,7 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Card, Divider, EmptyState, ListGroup, SectionTitle } from '@/components/layout';
-import { Avatar, DateBadge, EventCard, SyncPill } from '@/components/ledger';
+import { Avatar, DateBadge, EventCard, SyncStatus } from '@/components/ledger';
 import { Button } from '@/components/Button';
 import { getDb } from '@/db/client';
 import { countPendingChanges, getEventSummaries, getLastExchange, searchPeople, type EventSummary } from '@/db/ledger';
@@ -55,14 +55,22 @@ export default function HomeScreen() {
             accessibilityLabel={`${familyName}. ${t('switcher.switchA11y')}`}
             onPress={() => router.push('/family/switch')}
             hitSlop={8}
-            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            style={styles.ledgerButton}
           >
-            <AppText variant="section" weight="extrabold" style={{ fontSize: 22, lineHeight: 30, flexShrink: 1 }} numberOfLines={1} accessibilityRole="header">
-              {familyName}
-            </AppText>
-            <Feather name="chevron-down" size={20} color={colors.ink} />
+            <LedgerMark name={familyName} />
+            <View style={{ flexShrink: 1, minWidth: 0 }}>
+              <AppText variant="eyebrow" color={colors.marigoldInk}>
+                {t('home.ledgerLabel')}
+              </AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <AppText color={colors.sindoor} style={styles.ledgerName} numberOfLines={1} accessibilityRole="header">
+                  {familyName}
+                </AppText>
+                <Feather name="chevron-down" size={18} color={colors.sindoor} />
+              </View>
+            </View>
           </Pressable>
-          <SyncPill pendingCount={pending} />
+          <SyncStatus pendingCount={pending} />
         </View>
         <View style={styles.search}>
           <Feather name="search" size={20} color={colors.inkMuted} />
@@ -161,6 +169,19 @@ export default function HomeScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** The ledger's initial on a sindoor tile with a marigold dot, after the sign-in mark (श with the ₹ coin). */
+function LedgerMark({ name }: { name: string }) {
+  const letter = Array.from(name.trim())[0]?.toUpperCase() ?? '';
+  return (
+    <View importantForAccessibility="no" style={styles.mark}>
+      <AppText color={colors.surface} style={styles.markLetter}>
+        {letter}
+      </AppText>
+      <View style={styles.markDot} />
+    </View>
   );
 }
 
@@ -280,7 +301,30 @@ function SearchResults({
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.md, gap: space.md, backgroundColor: colors.surface },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  // Top-aligned so the sync status sits on the same line as the "Family ledger" label.
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  ledgerButton: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md },
+  mark: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: colors.sindoor,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markLetter: { fontFamily: fonts.wordmark, fontSize: 24, lineHeight: 32 },
+  markDot: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: colors.marigold,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  ledgerName: { fontFamily: fonts.wordmark, fontSize: 24, lineHeight: 32, flexShrink: 1 },
   search: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -97,6 +97,7 @@
     "addTitle": "Add a ledger"
   },
   "home": {
+    "ledgerLabel": "Family ledger",
     "search": "Search people or events",
     "scanInvite": "Scan invite card",
     "newEvent": "New event",
@@ -112,6 +113,8 @@
   },
   "events": {
     "title": "Events",
+    "count_one": "{{count}} event",
+    "count_other": "{{count}} events",
     "show": "Show events",
     "all": "All",
     "received": "Received",

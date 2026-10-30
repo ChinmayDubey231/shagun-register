@@ -3,7 +3,8 @@ import { useRouter } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radius, space, touch } from '@/theme';
+import { useSession } from '@/store/session';
+import { colors, fonts, radius, space, touch } from '@/theme';
 import { AppText } from './AppText';
 
 type IconName = ComponentProps<typeof Feather>['name'];
@@ -80,6 +81,34 @@ export function ScreenHeader({
   );
 }
 
+/**
+ * Heading for the main tabs, set like the Home header: the ledger's name in small caps over
+ * the tab's name in the wordmark face, with an optional count facing the ledger name.
+ */
+export function TabHeading({ title, meta }: { title: string; meta?: string }) {
+  const ledger = useSession((s) => s.family?.name ?? '');
+  return (
+    <View>
+      <View style={styles.tabEyebrows}>
+        <AppText variant="eyebrow" color={colors.marigoldInk} numberOfLines={1} style={{ flexShrink: 1 }}>
+          {ledger}
+        </AppText>
+        {meta ? (
+          <AppText variant="eyebrow" color={colors.inkSubtle}>
+            {meta}
+          </AppText>
+        ) : null}
+      </View>
+      <AppText color={colors.sindoor} style={styles.tabTitle} accessibilityRole="header" accessibilityLabel={title}>
+        {title}
+        <AppText color={colors.marigold} style={styles.tabTitle}>
+          .
+        </AppText>
+      </AppText>
+    </View>
+  );
+}
+
 export function Card({ children, style, padded = true }: { children: ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean }) {
   return <View style={[styles.card, padded && { padding: space.lg }, style]}>{children}</View>;
 }
@@ -138,6 +167,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
   },
+  tabEyebrows: { flexDirection: 'row', justifyContent: 'space-between', gap: space.md },
+  tabTitle: { fontFamily: fonts.wordmark, fontSize: 30, lineHeight: 38 },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,

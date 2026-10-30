@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Segmented } from '@/components/Choice';
-import { EmptyState } from '@/components/layout';
+import { EmptyState, TabHeading } from '@/components/layout';
 import { EventCard } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { getEventSummaries } from '@/db/ledger';
@@ -44,9 +44,7 @@ export default function EventsScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
       <View style={styles.header}>
-        <AppText variant="title" accessibilityRole="header">
-          {t('events.title')}
-        </AppText>
+        <TabHeading title={t('events.title')} meta={events.length > 0 ? t('events.count', { count: events.length }) : undefined} />
         <Segmented<Filter>
           label={t('events.show')}
           value={filter}

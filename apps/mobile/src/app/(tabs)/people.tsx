@@ -7,7 +7,7 @@ import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Chip, ChipRow } from '@/components/Choice';
-import { EmptyState } from '@/components/layout';
+import { EmptyState, TabHeading } from '@/components/layout';
 import { Avatar } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { getPeopleSummaries } from '@/db/ledger';
@@ -41,14 +41,7 @@ export default function PeopleScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <AppText variant="title" accessibilityRole="header">
-            {t('people.title')}
-          </AppText>
-          <AppText variant="label" color={colors.inkMuted}>
-            {t('people.count', { count: people.length })}
-          </AppText>
-        </View>
+        <TabHeading title={t('people.title')} meta={people.length > 0 ? t('people.count', { count: people.length }) : undefined} />
         <View style={styles.search}>
           <Feather name="search" size={20} color={colors.inkMuted} />
           <TextInput
@@ -130,7 +123,6 @@ export default function PeopleScreen() {
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.md, gap: space.md, borderBottomWidth: 1, borderBottomColor: colors.line },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   search: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 48, borderRadius: radius.button, backgroundColor: colors.ground, paddingHorizontal: 14 },
   searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 17, color: colors.ink, paddingVertical: 0 },
   list: { padding: space.xl, flexGrow: 1 },
