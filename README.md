@@ -1,21 +1,44 @@
-# Shagun Register
+<p align="center">
+  <img src="docs/app-icon.png" alt="Shagun Register icon: a white श on a sindoor tile, with a marigold ₹ coin on its corner" width="128">
+</p>
+
+<h1 align="center">Shagun Register</h1>
 
 A private family ledger for wedding and function gifts: log what you receive and give, work offline at the venue, and look up the full give-and-take history with any family.
 
 React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript throughout.
 
-## Status: Week 4 done (sync)
+## Status: Week 4 done (sync), plus a design pass
 
-**Week 4 is done when** two phones log entries offline at the same time and both end up with every entry. Three checks prove it:
+Weeks 1–4 are complete: an offline ledger, Hindi/English name matching, accounts and shared ledgers, and sync between phones. Since then:
+
+- **Sign-in opening animation:**
+  - The toran thread draws, marigolds drop and sway, the श mark pops, and a ₹ shagun coin lands with a glint.
+  - The name rises, शगुन रजिस्टर is inked in, and the rest staggers in (about 1.7 s).
+  - It uses React Native Animated on the native driver, with no new native libraries. With Reduce motion on, the finished screen shows at once.
+- **Branded headers:**
+  - **Home:** the ledger's initial sits on a sindoor monogram tile with a marigold dot, echoing the sign-in mark. A small-caps "FAMILY LEDGER" label sits over the ledger name, which is set in the Rozha One wordmark in sindoor. Tapping the name still opens the ledger switcher.
+  - **Sync status:** the green pill became a small-caps line facing that label. It reads **✓ ALL SAVED** in green when everything is on the server. While changes wait it turns marigold: **N TO SYNC**, **N ON PHONE** (offline) or **SYNCING…**.
+  - **Events, People and More** share one `TabHeading`: the ledger name in small caps, the tab name in the wordmark with a marigold full stop ("Events."), and a count where useful ("3 EVENTS", "12 IN LEDGER"). The count is hidden at zero.
+- **Fixes:**
+  - **Web preview database:** the preview at `http://localhost:8081` now opens its database. Expo serves the root page ahead of Metro's `enhanceMiddleware`, so the cross-origin isolation headers SQLite needs were missing on `/`. They're now set where the dev server is created.
+  - **Android subtitle:** "शगुन रजिस्टर" on sign-in is no longer cut to "शगुन". Android rounded the reveal box's width down a fraction of a pixel and wrapped the last word onto a clipped line.
+
+Scanning invite cards (week 5) still opens a placeholder screen.
+
+## What each week delivered
+
+### Week 4: sync between phones
+
+**Done when** two phones log entries offline at the same time and both end up with every entry. Three checks prove it:
 - **Two-phone integration test** (`apps/mobile/src/sync/sync.integration.test.ts`). Two real SQLite databases run the app's own ledger and sync code against the real API on a real MongoDB replica set. It automates the guide's manual offline test:
   - Both phones go offline and log 10 gifts each. Then one edits a gift the other logged, and the other deletes a different one.
   - They come back online in either order. Both end with 19 live entries, the edit and the delete, and identical totals.
   - Also covered: a push whose reply is lost (retried without doubling or new sequence numbers), a pull cut off between pages (resumes), a local change made during a pull (kept, then pushed), an edit racing a delete (the delete wins on both phones), and a change the server refuses (parked, not retried forever).
 - **Sync API tests** (`apps/api/test/sync.test.ts`): sequence order and paging, roles, safe retries, last-write-wins with history, deletes winning, partial rejection, cross-family id hijack refused, and two concurrent pushes getting gap-free sequence numbers 1–40.
-- **A two-phone browser run.** Both phones lose the server and log gifts (3 and 4). Each shows "N waiting" and an offline pill. Coming back online syncs by itself. Both end with all 7, and a correction made on one phone shows on the other. All 13 checks pass.
+- **A two-phone browser run.** Both phones lose the server and log gifts (3 and 4). Each shows how many changes are waiting and that it's offline. Coming back online syncs by itself. Both end with all 7, and a correction made on one phone shows on the other. All 13 checks pass.
 
-### Week 4
-
+What it does:
 - **API** (`apps/api/src/sync.ts`, `routes/sync.ts`):
   - **`POST /sync/push`** takes up to 100 outbox changes. Each record is validated on its own, so one bad record doesn't sink the batch. Every write takes the family's next sequence number (`families.lastSeq`, `$inc`) in the same MongoDB transaction as the write. A pull therefore can never see seq 11 while seq 10 is still uncommitted.
   - **`GET /sync/pull?since=`** returns records above `since` across all four tables in seq order, up to 500 a page with `hasMore`. The phone's clock is never used for ordering.
@@ -30,17 +53,16 @@ React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript through
   - **Pull** upserts each record unless it still has a pending local change, and saves `lastPulledSeq` in the same SQLite transaction. Interrupting it at any point loses and doubles nothing.
   - **Triggers:** startup and sign-in, back to the foreground, connection back, 5 s after a save (so a burst of gifts goes up as one batch), pull-to-refresh on every list, and *Sync now* on More. There is one sync at a time; a request mid-sync runs once more straight after.
   - **"Online" means our server answers:** NetInfo checks `/health` instead of a Google URL, and the phone retries every 30 s while the last attempt failed.
-  - **Status:** the header pill reads *Syncing…*, *N on phone* (offline), *N to sync* or *All saved*. A gift to a new guest counts as one change, not two. More shows when it last synced and any refused changes.
+  - **Status:** the Home header reads *Syncing…*, *N on phone* (offline), *N to sync* or *All saved*; More shows the same as a pill. A gift to a new guest counts as one change, not two. More also shows when the phone last synced and any refused changes.
   - **Role lost while offline:** if this account became a viewer, its queued changes are parked rather than retried, and pulling continues.
 
-### Week 3
+### Week 3: backend and accounts
 
-**Week 3 is done when** two family members can join the same ledger. Two checks prove it:
+**Done when** two family members can join the same ledger. Two checks prove it:
 - **API tests** (`apps/api/test/accounts.test.ts`) run against a real MongoDB replica set.
 - **A two-phone browser run** uses separate browsers, the real API and MongoDB. Chinmay signs in and creates "Dubey parivaar" offline-first, then makes an editor invite code. Neha signs in on the second phone and joins with the code (typed lower-case with a dash). Both see the two members. When Chinmay makes Neha a viewer, her phone goes read-only on the next launch. All 13 checks pass.
 
-### Week 3
-
+What it does:
 - **API** (Express 5 + Mongoose, `apps/api`):
   - **Sign-in:** Google ID tokens are verified on the server (audience = your web client ID). The server issues its own 15-minute JWTs and 30-day refresh tokens. Refresh tokens are stored hashed and replaced on every use; reusing an old one revokes all of that user's tokens.
   - **Endpoints:** `POST /auth/google`, `/auth/refresh`, `/auth/logout`, `GET/PATCH /me`, `POST /families` (idempotent: the phone sends the id it made offline), `GET/PATCH/DELETE /families/:id`, invites (create / list / cancel / accept), and member role change or removal.
@@ -52,13 +74,13 @@ React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript through
   - **Tokens:** kept in the Android Keystore via expo-secure-store and refreshed automatically. Being signed in works offline.
   - **Getting into a ledger:** create (offline; registered with the server when online) or join with a code.
   - **Family members:** invite code with Share, roles, remove, leave.
-  - **Switching:** a ledger switcher from the Home header, sign out from More.
+  - **Switching:** tap the ledger name in the Home header to switch ledgers; sign out from More.
   - **Viewers:** the app is read-only for them (no New event / Log a gift / edit), and the write path refuses too.
 - **On this phone:**
   - **Per-account ledgers:** another account signing in on the same phone doesn't see them. Ledgers made before sign-in existed are claimed by the first account.
   - **Server changes picked up:** whenever the app opens or comes to the foreground it applies renames and role changes, adds ledgers joined on another phone, and deletes ledgers you were removed from (records included).
 
-### Week 2
+### Week 2: Hindi/English name matching, search, cash count
 
 - **Hindi/English match key** (`packages/shared/src/matchKey.ts`):
   - Removes honorifics (Shri, Smt, ji, Dr, श्री, जी, डॉ …).
@@ -85,7 +107,7 @@ React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript through
   - Every saved count is kept as an audit trail and queued for sync.
 - **People tab:** relation filter chips.
 
-### Week 1
+### Week 1: offline app foundation
 
 - **Setup:** first launch asks you to name the family ledger.
 - **Events:** your own function or another family's, with sub-functions.
@@ -94,44 +116,63 @@ React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript through
 - **Other screens:** Home, People and person history.
 - **Saved for sync:** every save writes an outbox row in the same SQLite transaction.
 
-Scanning invite cards (week 5) still opens a placeholder screen.
-
 ## Repository layout
 
 ```
 apps/
-  mobile/          Expo app (Expo Router, routes in src/app/)
-    src/db/        Drizzle schema, write path + queries (ledger.ts), useDbQuery hook
-    src/theme/     Tokens from the design's UI kit
-    src/components/
-    src/i18n/      en.json now; hi.json in week 6
-    drizzle/       Generated SQL migrations
-    src/sync/      Sync engine (push/pull, no Expo imports) + two-phone integration test
-    src/lib/       API client, account, sync triggers
-  api/             Express 5 + Mongoose: auth, families, invites, roles, sync
-    src/sync.ts    Push/pull, sequence numbers, conflict rules, entry history
-    src/routes/    auth.ts (Google, refresh, /me), families.ts (families, invites, members), sync.ts
-    test/          supertest + mongodb-memory-server (real replica set)
+  mobile/            Expo app (Expo Router, routes in src/app/)
+    src/app/         Screens: sign-in, setup, (tabs)/ Home · Events · People · More, events/, people/, family/
+    src/components/  SignInIntro (opening animation), layout (TabHeading, cards), ledger (SyncStatus, SyncPill, entry rows)
+    src/db/          Drizzle schema, write path + queries (ledger.ts), useDbQuery hook
+    src/sync/        Sync engine (push/pull, no Expo imports) + two-phone integration test
+    src/lib/         API client, account, sync triggers
+    src/theme/       Tokens from the design's UI kit: colours, spacing, type scale (incl. eyebrow)
+    src/i18n/        en.json now; hi.json in week 6
+    drizzle/         Generated SQL migrations
+    metro.config.js  .sql imports, wasm assets, and the web preview's cross-origin isolation headers
+  api/               Express 5 + Mongoose: auth, families, invites, roles, sync
+    src/sync.ts      Push/pull, sequence numbers, conflict rules, entry history
+    src/routes/      auth.ts (Google, refresh, /me), families.ts (families, invites, members), sync.ts
+    test/            supertest + mongodb-memory-server (real replica set)
 packages/
-  shared/          zod schemas, API contract, match key, rupee formatting — used by phone and server
+  shared/            zod schemas, API contract, match key, rupee formatting — used by phone and server
 ```
 
 ## Run it
 
-Requires Node 22+.
+Requires Node 22+ and MongoDB **running as a replica set**, because sync uses transactions. MongoDB Atlas always is one. For a local database, start a single-node replica set once:
+
+```bash
+mkdir -p ~/shagun-mongo        # data folder, kept outside the repo
+mongod --dbpath ~/shagun-mongo --port 27017 --replSet rs0
+mongosh --port 27017 --eval 'rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "127.0.0.1:27017" }] })'
+```
+
+If something else already uses port 27017 (for example a MongoDB Windows service), pick another port and change it in `MONGODB_URI`.
 
 ```bash
 npm install
-cp apps/api/.env.example apps/api/.env        # fill in MONGODB_URI and JWT_ACCESS_SECRET
-cp apps/mobile/.env.example apps/mobile/.env  # EXPO_PUBLIC_API_URL, Google web client ID
+cp apps/api/.env.example apps/api/.env        # MONGODB_URI, JWT_ACCESS_SECRET (32+ chars), DEV_LOGIN=true for local
+cp apps/mobile/.env.example apps/mobile/.env  # EXPO_PUBLIC_API_URL, EXPO_PUBLIC_DEV_LOGIN=1, Google web client ID
 npm run api       # API on http://localhost:4000/health
 npm run mobile    # Expo dev server
 npm test          # all workspaces (API tests download a MongoDB binary the first time)
 npm run typecheck
 ```
 
+### Where to open the app
+
+- **Web preview:** run `npm --workspace apps/mobile run web`, then open `http://localhost:8081`.
+  - Set `EXPO_PUBLIC_API_URL=http://localhost:4000` in the app, and keep `CORS_ORIGINS=http://localhost:8081` on the API.
+  - SQLite runs as WebAssembly and needs `SharedArrayBuffer`. The dev server sends the required `Cross-Origin-Embedder-Policy` and `Cross-Origin-Opener-Policy` headers (see `metro.config.js`); a hosted web build must send them too.
+- **Android emulator:** run `npm run mobile`, then press `a` (or run `npx expo start --android`).
+  - The emulator reaches your computer at `http://10.0.2.2:4000`, which is the default in `apps/mobile/.env.example`.
+  - Alternatively, keep `http://localhost:4000` and run `adb reverse tcp:4000 tcp:4000`. Run it again after every emulator restart.
+- **Phone on the same Wi-Fi:** set `EXPO_PUBLIC_API_URL=http://<your computer's LAN IP>:4000`, then scan the QR code with Expo Go.
+
 **Expo Go vs development build:**
-- **Expo Go** still runs everything except Google sign-in. Use *Developer sign-in* (`EXPO_PUBLIC_DEV_LOGIN=1` in the app, `DEV_LOGIN=true` on the API).
+- **Expo Go** runs everything except Google sign-in. Use *Developer sign-in* (`EXPO_PUBLIC_DEV_LOGIN=1` in the app, `DEV_LOGIN=true` on the API).
+  - The phone needs the Expo Go release for SDK 58. Expo CLI offers to install it when an older one is on the device.
 - **Google sign-in needs a development build**, because it's a native module: `npx expo run:android`, or `npx eas-cli@latest build --profile development --platform android`.
 
 ### Google sign-in setup (once)
@@ -148,9 +189,8 @@ npm run typecheck
 ### Deploy the API (Render + MongoDB Atlas)
 
 1. **Database:** create a free MongoDB Atlas cluster and a database user. Under Network Access, allow `0.0.0.0/0`: Render's free tier has no fixed IPs, and the user password protects access. Copy the connection string.
-2. **Repo:** push this repo to GitHub.
-3. **Render:** create a Blueprint from `render.yaml`. It asks for `MONGODB_URI` and `GOOGLE_CLIENT_IDS`, and generates `JWT_ACCESS_SECRET` itself.
-4. **Connect the app:** set `EXPO_PUBLIC_API_URL` in the app to the Render URL.
+2. **Render:** create a Blueprint from `render.yaml` in this repository ([github.com/ChinmayDubey231/shagun-register](https://github.com/ChinmayDubey231/shagun-register)). It asks for `MONGODB_URI` and `GOOGLE_CLIENT_IDS`, and generates `JWT_ACCESS_SECRET` itself.
+3. **Connect the app:** set `EXPO_PUBLIC_API_URL` in the app to the Render URL.
    - Free Render services sleep after 15 minutes idle, so the first request takes about 30 s.
    - Nothing breaks while it sleeps: the app works offline and retries.
 
@@ -158,11 +198,17 @@ npm run typecheck
 
 - **The local database is the source of truth.** Screens read and write only SQLite. Each save writes the record and an outbox row in a single transaction, so a crash can never leave a gift saved but unqueued.
 - **Money is stored as integer whole rupees.** All totals go through `sumAmounts`. Display uses Indian digit grouping (₹3,77,500).
-- **Ids are UUIDs made on the phone**, so two relatives logging offline at the same wedding never collide. The family id is also made on the phone, so `POST /families` in week 3 can register the same id.
+- **Ids are UUIDs made on the phone**, so two relatives logging offline at the same wedding never collide. The family id is also made on the phone, so `POST /families` can register the same id.
 - **Live queries come from `useDbQuery`.** Drizzle's `useLiveQuery` only watches a query's main table, so an event total wouldn't refresh when an entry was added. `useDbQuery` re-runs a query when any table it lists changes.
 - **Typing a name without picking a suggestion** reuses the person when exactly one exact match exists, and asks you to pick when there are several. This keeps duplicates down before merge arrives in week 5.
 - **The match key lives in `packages/shared`**, so the phone's search and the server's duplicate check (week 5) always compute identical keys. Merges are only ever suggested, never automatic.
 - **Name matching uses a custom transliterator, not a Sanskrit library.** Sanskrit schemes keep every inherent vowel (कमला → kamalā), which never matches how Hindi names are typed. The custom transliterator applies Hindi schwa deletion instead.
+- **Two typefaces, each with one job:**
+  - **Rozha One** (the wordmark) marks identity: the sign-in title, the श mark, the ledger name and the tab titles.
+  - **Mukta** covers everything else, in Latin and Devanagari.
+  - **Small-caps labels** use the theme's `eyebrow` text style.
+- **Colour is for attention, not decoration.** Sindoor and marigold come from the UI kit. The sync status stays quiet when everything is saved and turns marigold only while changes wait on the phone. Direction is never shown by colour alone: received is blue with ↙, given is orange with ↗.
+- **Animations only move opacity and transforms on the native driver**, so typing is never delayed, and Reduce motion skips them.
 
 ## Next: Week 5 (merge, OCR, exports)
 
