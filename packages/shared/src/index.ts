@@ -5,5 +5,6 @@ export * from './simpleKey';
 export * from './transliterate';
 export * from './matchKey';
 export * from './personSearch';
+export * from './duplicates';
 export * from './api';
 export * from './sync';

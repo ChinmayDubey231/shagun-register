@@ -184,3 +184,82 @@ describe('conflict rules', () => {
     expect(seqs).toEqual(Array.from({ length: 40 }, (_, i) => i + 1));
   });
 });
+
+describe('Week 5: merging people', () => {
+  /** Two people who are the same household, each with a gift, synced to the server. */
+  async function duplicates() {
+    const f = await family();
+    const keep = person(f.familyId, 'Ramesh Sharma');
+    const dup = person(f.familyId, 'रमेश शर्मा');
+    const e = event(f.familyId);
+    const g1 = entry(f.familyId, e.id, keep.id, { amount: 1100 });
+    const g2 = entry(f.familyId, e.id, dup.id, { amount: 2100 });
+    await push(f.owner, f.familyId, [ch('people', keep), ch('people', dup), ch('events', e), ch('entries', g1), ch('entries', g2)]);
+    return { ...f, keep, dup, e, g1, g2 };
+  }
+  const merged = (p: object, into: string) => ({ ...p, mergedInto: into, updatedAt: now() + 10 });
+  const latest = async (who: AuthResponse, familyId: string) => {
+    const byId = new Map<string, Record<string, unknown>>();
+    for (const r of (await pull(who, familyId)).records) byId.set(r.record.id, r.record);
+    return byId;
+  };
+
+  it('moves gifts logged on a phone that hadn’t heard of the merge to the kept person', async () => {
+    const { owner, editor, familyId, keep, dup, e, g2 } = await duplicates();
+    // The owner's phone merges: moves its copy of the gift, then marks the duplicate.
+    await push(owner, familyId, [ch('entries', { ...g2, personId: keep.id, updatedAt: now() + 5 }), ch('people', merged(dup, keep.id))]);
+    // The editor's phone, offline during the merge, logs another gift against the duplicate.
+    const late = entry(familyId, e.id, dup.id, { amount: 501 });
+    const res = await push(editor, familyId, [ch('entries', late)]);
+    expect(res.body.records[0]!.record.personId).toBe(keep.id);
+
+    const server = await latest(editor, familyId);
+    expect(server.get(dup.id)!.mergedInto).toBe(keep.id);
+    const gifts = [...server.values()].filter((r) => r.eventId === e.id);
+    expect(gifts.map((g) => g.personId)).toEqual([keep.id, keep.id, keep.id]);
+  });
+
+  it('moves gifts the server already had when the merge arrives, keeping history', async () => {
+    const { owner, familyId, keep, dup, g2 } = await duplicates();
+    // A merge record on its own (the phone's own moves were lost): the server moves the rest.
+    await push(owner, familyId, [ch('people', merged(dup, keep.id))]);
+    const server = await latest(owner, familyId);
+    expect(server.get(g2.id)!.personId).toBe(keep.id);
+    const history = await request(app).get(`/families/${familyId}/entries/${g2.id}/history`).set(bearer(owner));
+    expect(history.body.map((h: { version: { personId: string } }) => h.version.personId)).toEqual([dup.id]);
+  });
+
+  it('keeps a merge when a phone that hadn’t heard of it edits the merged person', async () => {
+    const { owner, editor, familyId, keep, dup } = await duplicates();
+    await push(owner, familyId, [ch('people', merged(dup, keep.id))]);
+    const stale = await push(editor, familyId, [ch('people', { ...dup, phone: '9826012345', updatedAt: now() + 20 })]);
+    expect(stale.body.records[0]!.record.mergedInto).toBe(keep.id);
+    expect(stale.body.records[0]!.record.phone).toBe('9826012345');
+  });
+
+  it('two phones merging each other’s way end with one person and every gift', async () => {
+    const { owner, editor, familyId, keep, dup, g1, g2 } = await duplicates();
+    // Owner keeps "Ramesh Sharma"; editor, offline, kept "रमेश शर्मा".
+    await push(owner, familyId, [ch('entries', { ...g2, personId: keep.id, updatedAt: now() + 5 }), ch('people', merged(dup, keep.id))]);
+    const res = await push(editor, familyId, [ch('entries', { ...g1, personId: dup.id, updatedAt: now() + 6 }), ch('people', merged(keep, dup.id))]);
+    expect(res.body.rejected).toEqual([]);
+
+    const server = await latest(owner, familyId);
+    expect(server.get(dup.id)!.mergedInto).toBe(keep.id);
+    expect(server.get(keep.id)!.mergedInto).toBeNull(); // the loop-making merge was dropped
+    expect([g1.id, g2.id].map((id) => server.get(id)!.personId)).toEqual([keep.id, keep.id]);
+  });
+
+  it('follows a chain of merges and refuses a merge into another ledger’s person', async () => {
+    const { owner, familyId, keep, dup, e } = await duplicates();
+    const third = person(familyId, 'Sharma ji Indore');
+    await push(owner, familyId, [ch('people', third), ch('people', merged(dup, keep.id))]);
+    await push(owner, familyId, [ch('people', merged(keep, third.id))]);
+    const late = await push(owner, familyId, [ch('entries', entry(familyId, e.id, dup.id))]);
+    expect(late.body.records[0]!.record.personId).toBe(third.id);
+
+    const stranger = person(familyId, 'Stranger');
+    const res = await push(owner, familyId, [ch('people', { ...stranger, mergedInto: randomUUID() })]);
+    expect(res.body.rejected.map((r) => r.code)).toEqual(['VALIDATION']);
+  });
+});

@@ -8,9 +8,9 @@ A private family ledger for wedding and function gifts: log what you receive and
 
 React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript throughout.
 
-## Status: Week 4 done (sync), plus a design pass
+## Status: Week 5 done (merge, invite cards, exports)
 
-Weeks 1–4 are complete: an offline ledger, Hindi/English name matching, accounts and shared ledgers, and sync between phones. Since then:
+Weeks 1–5 are complete: an offline ledger, Hindi/English name matching, accounts and shared ledgers, sync between phones, and now duplicate merging, invite-card scanning and PDF/Excel exports. Between weeks 4 and 5 the app also had a design pass:
 
 - **Sign-in opening animation:**
   - The toran thread draws, marigolds drop and sway, the श mark pops, and a ₹ shagun coin lands with a glint.
@@ -24,9 +24,58 @@ Weeks 1–4 are complete: an offline ledger, Hindi/English name matching, accoun
   - **Web preview database:** the preview at `http://localhost:8081` now opens its database. Expo serves the root page ahead of Metro's `enhanceMiddleware`, so the cross-origin isolation headers SQLite needs were missing on `/`. They're now set where the dev server is created.
   - **Android subtitle:** "शगुन रजिस्टर" on sign-in is no longer cut to "शगुन". Android rounded the reveal box's width down a fraction of a pixel and wrapped the last word onto a clipped line.
 
-Scanning invite cards (week 5) still opens a placeholder screen.
-
 ## What each week delivered
+
+### Week 5: duplicate merge, invite cards, exports
+
+**Done when** a merge made on one phone holds on every phone without losing a gift, an invite card fills in the new-event form, and an event or the whole ledger leaves the phone as a PDF or a spreadsheet. These checks prove it:
+- **Two-phone merge tests** (`apps/mobile/src/sync/sync.integration.test.ts`), against the real API and MongoDB:
+  - One phone merges "रमेश शर्मा" into "Ramesh Sharma" while the other, offline, logs a gift against "रमेश शर्मा". After syncing, both phones show one person with all three gifts.
+  - Two phones merge the same pair in opposite directions while offline. Both settle on one person with every gift.
+- **Merge API tests** (`apps/api/test/sync.test.ts`):
+  - Gifts that reach the server after the merge, or were already there, move to the kept person, and entry history keeps the old version.
+  - An edit from a phone that hadn't heard of the merge doesn't undo it.
+  - A loop is dropped, a chain of merges is followed, and a merge into another ledger's person is refused.
+- **Phone tests** (`apps/mobile/src/db/ledger.test.ts`): suggestions and "Not the same", moving gifts and hosted functions, filling blanks, the four queued changes, following a stale id, and refusals.
+- **Card-reading tests** (`apps/mobile/src/scan/parseInvite.test.ts`): English, Hindi (with Devanagari digits) and mixed wedding cards, a griha pravesh, a birthday with no year, a mundan, and unreadable text. Merging the two OCR readings is tested too.
+- **Export tests** (`apps/mobile/src/export/export.test.ts`): the workbook's parts, rows and number formats, and the register's grouping, totals, cash line and HTML escaping. A sample workbook also opens in openpyxl, and a 36-gift register renders in Chromium.
+- **A browser run** (web preview, real API and MongoDB), with no page errors:
+  - Two spellings of one guest come in by sync, and People shows "1 possible duplicate". Merging leaves one Ramesh Sharma with both gifts and the Hindi spelling and phone filled in.
+  - The Excel file downloads and the register opens for printing.
+  - The new-event form filled from a card creates the event.
+
+What it does:
+- **Duplicate merge:**
+  - **Suggestions** (`packages/shared/src/duplicates.ts`):
+    - People are suggested when they share a match key and their cities don't conflict, or when they share a 10-digit phone number. Cities are compared by consonant skeleton, so Indore and इंदौर agree.
+    - A banner on People leads to them. *Not the same* hides a pair on this phone.
+  - **Merge** (from a suggestion, or the merge icon on a person):
+    - Choose which entry stays. The other's gifts and hosted functions move across, and its city, phone, relation and Hindi spelling fill any blanks.
+    - The merged person keeps `mergedInto` instead of being deleted. Every change is queued, so the merge syncs like any edit.
+    - A link to the merged person opens the kept one, and Quick Entry follows a stale id.
+  - **On the server:**
+    - Merges stick like deletes: an edit from a phone that hadn't heard of the merge keeps it.
+    - Gifts and functions logged against the merged person on other phones move to the kept one.
+    - Chains are followed, and a loop (two phones merging opposite ways) is dropped.
+- **Scan invite card:**
+  - **Taking the photo:** take one, or choose one from the gallery, for example a card that came on WhatsApp.
+  - **Reading it:** a local Expo module (`apps/mobile/modules/invite-text`) runs Google ML Kit's Latin and Devanagari recognizers on the phone. Where both read the same line, the more confident reading wins.
+  - **Finding the details** (`apps/mobile/src/scan/parseInvite.ts`):
+    - the type, and the date of the main function: Hindi or English months, Devanagari digits, dd.mm.yyyy, or no year (the next time that date comes round);
+    - the couple or child, the host family and the venue;
+    - a wedding's functions: Sagai, Tilak, Haldi, Mehendi, Sangeet, Mayra, Wedding and Reception.
+  - **Filling the form:** the new-event form opens filled in as another family's function, with a note to check it. The recognized text stays viewable.
+  - **Privacy:** the photo stays in the app's cache and nothing is uploaded.
+  - **Where it works:** it needs an Android development or release build. Expo Go, iOS and the web preview offer *Type it in instead*. The bundled models add about 4 MB per script per CPU architecture.
+- **Exports** (`apps/mobile/src/export`), made from the phone's own database, so they work offline; viewers can export too:
+  - **PDF register** (the share icon on an event):
+    - totals, the split by mode, and the latest cash count against cash logged;
+    - every gift in the order it was logged, grouped by function with subtotals.
+    - It's A4, made with expo-print and shared with expo-sharing.
+  - **Excel** (More → *Export to Excel*):
+    - Gifts, People and Events sheets, with real dates and amounts as numbers in Indian grouping (12,34,567);
+    - frozen headers and filters.
+    - A small SpreadsheetML writer zipped with fflate (`xlsx.ts`) makes it, with no native code.
 
 ### Week 4: sync between phones
 
@@ -121,21 +170,24 @@ What it does:
 ```
 apps/
   mobile/            Expo app (Expo Router, routes in src/app/)
-    src/app/         Screens: sign-in, setup, (tabs)/ Home · Events · People · More, events/, people/, family/
+    src/app/         Screens: sign-in, setup, (tabs)/ Home · Events · People · More, events/, people/ (incl. duplicates, merge), family/, scan-invite
     src/components/  SignInIntro (opening animation), layout (TabHeading, cards), ledger (SyncStatus, SyncPill, entry rows)
     src/db/          Drizzle schema, write path + queries (ledger.ts), useDbQuery hook
     src/sync/        Sync engine (push/pull, no Expo imports) + two-phone integration test
-    src/lib/         API client, account, sync triggers
+    src/lib/         API client, account, sync triggers, exports (build a file, open the share sheet)
+    src/export/      Excel writer (xlsx.ts), ledger workbook, event register HTML
+    src/scan/        Invite-card parser and merging of the two OCR readings
     src/theme/       Tokens from the design's UI kit: colours, spacing, type scale (incl. eyebrow)
     src/i18n/        en.json now; hi.json in week 6
     drizzle/         Generated SQL migrations
+    modules/invite-text/  Local Expo module (Android): ML Kit text recognition, Latin + Devanagari
     metro.config.js  .sql imports, wasm assets, and the web preview's cross-origin isolation headers
   api/               Express 5 + Mongoose: auth, families, invites, roles, sync
     src/sync.ts      Push/pull, sequence numbers, conflict rules, entry history
     src/routes/      auth.ts (Google, refresh, /me), families.ts (families, invites, members), sync.ts
     test/            supertest + mongodb-memory-server (real replica set)
 packages/
-  shared/            zod schemas, API contract, match key, rupee formatting — used by phone and server
+  shared/            zod schemas, API contract, match key, duplicate suggestions, rupee formatting — used by phone and server
 ```
 
 ## Run it
@@ -171,9 +223,9 @@ npm run typecheck
 - **Phone on the same Wi-Fi:** set `EXPO_PUBLIC_API_URL=http://<your computer's LAN IP>:4000`, then scan the QR code with Expo Go.
 
 **Expo Go vs development build:**
-- **Expo Go** runs everything except Google sign-in. Use *Developer sign-in* (`EXPO_PUBLIC_DEV_LOGIN=1` in the app, `DEV_LOGIN=true` on the API).
+- **Expo Go** runs everything except Google sign-in and invite-card scanning. Use *Developer sign-in* (`EXPO_PUBLIC_DEV_LOGIN=1` in the app, `DEV_LOGIN=true` on the API).
   - The phone needs the Expo Go release for SDK 58. Expo CLI offers to install it when an older one is on the device.
-- **Google sign-in needs a development build**, because it's a native module: `npx expo run:android`, or `npx eas-cli@latest build --profile development --platform android`.
+- **Google sign-in and card scanning need a development build**, because they're native modules: `npx expo run:android`, or `npx eas-cli@latest build --profile development --platform android`.
 
 ### Google sign-in setup (once)
 
@@ -200,8 +252,10 @@ npm run typecheck
 - **Money is stored as integer whole rupees.** All totals go through `sumAmounts`. Display uses Indian digit grouping (₹3,77,500).
 - **Ids are UUIDs made on the phone**, so two relatives logging offline at the same wedding never collide. The family id is also made on the phone, so `POST /families` can register the same id.
 - **Live queries come from `useDbQuery`.** Drizzle's `useLiveQuery` only watches a query's main table, so an event total wouldn't refresh when an entry was added. `useDbQuery` re-runs a query when any table it lists changes.
-- **Typing a name without picking a suggestion** reuses the person when exactly one exact match exists, and asks you to pick when there are several. This keeps duplicates down before merge arrives in week 5.
-- **The match key lives in `packages/shared`**, so the phone's search and the server's duplicate check (week 5) always compute identical keys. Merges are only ever suggested, never automatic.
+- **Typing a name without picking a suggestion** reuses the person when exactly one exact match exists, and asks you to pick when there are several. This keeps duplicates down; the rest show up as duplicate suggestions.
+- **The match key lives in `packages/shared`**, so the phone's search and duplicate suggestions and the server's stored keys always agree. Merges are only ever suggested, never automatic.
+- **A merge is an edit, not a delete.** The merged person stays with `mergedInto`, and the server treats it like a delete: it sticks, and anything that arrives late for that person goes to the one kept.
+- **Card reading and exports stay on the phone.** ML Kit reads the photo on the device, and the photo isn't kept. PDFs and spreadsheets are made from the local database. Nothing leaves the phone except through the share sheet.
 - **Name matching uses a custom transliterator, not a Sanskrit library.** Sanskrit schemes keep every inherent vowel (कमला → kamalā), which never matches how Hindi names are typed. The custom transliterator applies Hindi schwa deletion instead.
 - **Two typefaces, each with one job:**
   - **Rozha One** (the wordmark) marks identity: the sign-in title, the श mark, the ledger name and the tab titles.
@@ -210,8 +264,7 @@ npm run typecheck
 - **Colour is for attention, not decoration.** Sindoor and marigold come from the UI kit. The sync status stays quiet when everything is saved and turns marigold only while changes wait on the phone. Direction is never shown by colour alone: received is blue with ↙, given is orange with ↗.
 - **Animations only move opacity and transforms on the native driver**, so typing is never delayed, and Reduce motion skips them.
 
-## Next: Week 5 (merge, OCR, exports)
+## Next: Week 6 (Hindi, app lock)
 
-1. **Duplicate merge:** suggestions from the shared match key, and a merge that moves entries and leaves `mergedInto` on the old person (synced like any other change).
-2. **Scan invite card:** on-device text recognition fills the new-event form.
-3. **Exports:** a PDF of an event's register and an Excel file of the whole ledger, shared from the phone.
+1. **Hindi:** fill in `hi.json` and add a language switch on More. The account already stores a language.
+2. **App lock:** ask for the phone's PIN or fingerprint when the app opens.

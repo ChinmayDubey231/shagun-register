@@ -7,13 +7,14 @@ import { Alert, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
-import { EmptyState, ScreenHeader } from '@/components/layout';
+import { EmptyState, IconButton, ScreenHeader } from '@/components/layout';
 import { EntryRow } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { deleteEntry, getEventEntries, getEventModeTotals, getEventSummary } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
+import { exportErrorMessage, shareEventRegister } from '@/lib/exports';
 import { formatDate } from '@/lib/format';
-import { useCanEdit, useLedgerContext } from '@/store/session';
+import { useCanEdit, useLedgerContext, useSession } from '@/store/session';
 import { colors, radius, space } from '@/theme';
 import { useSyncRefresh } from '@/lib/useSyncRefresh';
 
@@ -25,6 +26,8 @@ export default function EventDetailScreen() {
   const ctx = useLedgerContext();
   const canEdit = useCanEdit();
   const [fn, setFn] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const ledgerName = useSession((s) => s.family?.name ?? '');
 
   const event = useDbQuery(() => getEventSummary(getDb(), ctx.familyId, id), ['events', 'entries', 'people'], [id, ctx.familyId]);
   const modes = useDbQuery(() => getEventModeTotals(getDb(), id), ['entries'], [id]);
@@ -57,6 +60,18 @@ export default function EventDetailScreen() {
       { text: t('eventDetail.editEntry'), onPress: () => router.push({ pathname: '/events/[id]/entry', params: { id, entryId } }) },
     ]);
 
+  const exportPdf = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await shareEventRegister(ctx.familyId, ledgerName, id, t);
+    } catch (e) {
+      Alert.alert(exportErrorMessage(e, t));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const confirmDelete = (entryId: string, name: string, amount: string) =>
     Alert.alert(t('eventDetail.deleteTitle'), t('eventDetail.deleteBody', { name, amount }), [
       { text: t('common.cancel'), style: 'cancel' },
@@ -66,7 +81,10 @@ export default function EventDetailScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.ground }}>
       <SafeAreaView edges={['top']} style={{ backgroundColor: colors.sindoor }}>
-        <ScreenHeader tone="sindoor" />
+        <ScreenHeader
+          tone="sindoor"
+          right={<IconButton icon={exporting ? 'loader' : 'share'} label={t('export.pdf')} color={colors.surface} onPress={() => void exportPdf()} />}
+        />
         <View style={styles.hero}>
           <AppText variant="title" color={colors.surface} accessibilityRole="header">
             {event.title}

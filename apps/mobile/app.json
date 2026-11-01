@@ -42,7 +42,15 @@
           "contactsPermission": "Shagun Register uses your contacts to suggest names when you log a gift. Contacts are not uploaded."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Shagun Register uses the camera to read invite cards. Photos stay on your phone.",
+          "photosPermission": "Shagun Register reads invite cards you choose from your photos. Photos stay on your phone.",
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

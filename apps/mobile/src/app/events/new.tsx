@@ -1,7 +1,7 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Feather } from '@expo/vector-icons';
 import { EVENT_TYPES, SUB_FUNCTIONS, type EventRole, type EventType } from '@shagun/shared';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -20,20 +20,45 @@ import { dateToISO, formatDate, isoToLocalDate, todayISO } from '@/lib/format';
 import { useLedgerContext } from '@/store/session';
 import { colors, radius, space } from '@/theme';
 
+/** What Scan invite card found, passed as route params. Anything missing or malformed is ignored. */
+type CardParams = { fromCard?: string; title?: string; type?: string; date?: string; venue?: string; hostName?: string; subFunctions?: string };
+
+function readCard(p: CardParams) {
+  if (p.fromCard !== '1') return null;
+  let subFunctions: string[] = [];
+  try {
+    const parsed: unknown = JSON.parse(p.subFunctions ?? '[]');
+    if (Array.isArray(parsed)) subFunctions = parsed.filter((f): f is string => typeof f === 'string' && f.length <= 40).slice(0, 12);
+  } catch {
+    // keep none
+  }
+  return {
+    title: p.title ?? '',
+    type: (EVENT_TYPES as readonly string[]).includes(p.type ?? '') ? (p.type as EventType) : null,
+    date: /^\d{4}-\d{2}-\d{2}$/.test(p.date ?? '') ? p.date! : null,
+    venue: p.venue ?? '',
+    hostName: p.hostName ?? '',
+    subFunctions,
+  };
+}
+
 export default function CreateEventScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const ctx = useLedgerContext();
+  const params = useLocalSearchParams<CardParams>();
+  const [card] = useState(() => readCard(params));
 
-  const [title, setTitle] = useState('');
-  const [type, setType] = useState<EventType>('wedding');
-  const [role, setRole] = useState<EventRole>('hosted');
-  const [hostName, setHostName] = useState('');
+  const [title, setTitle] = useState(card?.title ?? '');
+  const [type, setType] = useState<EventType>(card?.type ?? 'wedding');
+  // A scanned card is usually another family's invitation: their function, gifts given.
+  const [role, setRole] = useState<EventRole>(card ? 'attended' : 'hosted');
+  const [hostName, setHostName] = useState(card?.hostName ?? '');
   const [host, setHost] = useState<PersonMatch | null>(null);
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(card?.date ?? todayISO());
   const [showDate, setShowDate] = useState(false);
-  const [venue, setVenue] = useState('');
-  const [subFunctions, setSubFunctions] = useState<string[]>([]);
+  const [venue, setVenue] = useState(card?.venue ?? '');
+  const [subFunctions, setSubFunctions] = useState<string[]>(card?.subFunctions ?? []);
   const [customFn, setCustomFn] = useState('');
   const [addingFn, setAddingFn] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -91,6 +116,14 @@ export default function CreateEventScreen() {
       />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          {card ? (
+            <View style={styles.fromCard} accessibilityLiveRegion="polite">
+              <Feather name="camera" size={18} color={colors.marigoldInk} />
+              <AppText variant="meta" color={colors.onMarigold} style={{ flex: 1 }}>
+                {t('scan.filled')}
+              </AppText>
+            </View>
+          ) : null}
           <Field
             label={t('createEvent.nameLabel')}
             placeholder={t('createEvent.namePlaceholder')}
@@ -286,6 +319,14 @@ export default function CreateEventScreen() {
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: space.xl, paddingBottom: space.xxl, gap: 18 },
+  fromCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    padding: space.md,
+    borderRadius: radius.input,
+    backgroundColor: colors.marigoldTint,
+  },
   group: { gap: space.sm },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   row2: { flexDirection: 'row', gap: space.md },

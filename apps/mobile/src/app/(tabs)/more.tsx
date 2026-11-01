@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
@@ -10,6 +11,7 @@ import { Card, Divider, ListGroup, TabHeading } from '@/components/layout';
 import { Avatar, SyncPill } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { countPendingChanges } from '@/db/ledger';
+import { exportErrorMessage, shareLedgerWorkbook } from '@/lib/exports';
 import { syncNow, useSyncStatus } from '@/lib/sync';
 import { useSyncRefresh } from '@/lib/useSyncRefresh';
 import { countRejected } from '@/sync/engine';
@@ -51,7 +53,7 @@ function ago(at: number, t: ReturnType<typeof useTranslation>['t']) {
   return minutes < 1 ? t('sync.justNow') : t('sync.minutesAgo', { count: minutes });
 }
 
-/** Ledger, members, account. Export, language and app lock arrive in later weeks. */
+/** Ledger, members, export, account. Hindi and app lock arrive in later weeks. */
 export default function MoreScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -62,7 +64,20 @@ export default function MoreScreen() {
   const rejected = useDbQuery(() => countRejected(getDb()), ['outbox'], []);
   const sync = useSyncStatus();
   const refreshControl = useSyncRefresh();
+  const [exporting, setExporting] = useState(false);
   const roleLabel = { owner: t('family.roleOwner'), editor: t('family.roleEditor'), viewer: t('family.roleViewer') };
+
+  const exportExcel = async () => {
+    if (!family || exporting) return;
+    setExporting(true);
+    try {
+      await shareLedgerWorkbook(family.id, family.name, t);
+    } catch (e) {
+      Alert.alert(exportErrorMessage(e, t));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const confirmSignOut = () =>
     Alert.alert(t('more.signOut'), t('more.signOutConfirm'), [
@@ -142,6 +157,20 @@ export default function MoreScreen() {
           <Divider />
           <Row icon="repeat" label={t('more.switch')} detail={String(families.length)} onPress={() => router.push('/family/switch')} />
         </ListGroup>
+
+        <View style={{ gap: space.sm }}>
+          <ListGroup>
+            <Row
+              icon={exporting ? 'loader' : 'download'}
+              label={t('export.excel')}
+              detail={exporting ? t('export.working') : undefined}
+              onPress={() => void exportExcel()}
+            />
+          </ListGroup>
+          <AppText variant="caption" color={colors.inkMuted} style={{ paddingHorizontal: space.sm }}>
+            {t('export.excelHint')}
+          </AppText>
+        </View>
 
         <Card style={{ gap: space.md }}>
           <AppText variant="label" color={colors.inkMuted}>

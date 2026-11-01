@@ -152,4 +152,5 @@ export const SQL_TABLE_NAMES = {
   cashCounts: 'cash_counts',
   outbox: 'outbox',
   syncMeta: 'sync_meta',
+  appSettings: 'app_settings',
 } as const;

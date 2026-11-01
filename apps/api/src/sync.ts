@@ -104,12 +104,59 @@ async function nextSeq(familyId: string, session: ClientSession): Promise<number
   return family.lastSeq;
 }
 
+async function keepHistory(familyId: string, entry: Document, userId: string, session: ClientSession) {
+  await db()
+    .collection(HISTORY)
+    .insertOne(
+      { _id: randomUUID() as never, familyId, entryId: entry._id, version: toRecord(entry), replacedAt: Date.now(), replacedBy: userId },
+      { session },
+    );
+}
+
+/**
+ * Follows mergedInto from a person to the one that was kept (merges can chain: A into B,
+ * later B into C). Null when the person isn't in this family. Stops at a loop.
+ */
+async function keptPerson(familyId: string, personId: string, session: ClientSession): Promise<string | null> {
+  const find = (id: string) => coll('people').findOne({ _id: id as never, familyId }, { session, projection: { mergedInto: 1 } });
+  let person = await find(personId);
+  if (!person) return null;
+  const seen = new Set<string>([String(person._id)]);
+  while (person.mergedInto && !seen.has(person.mergedInto as string)) {
+    const next = await find(person.mergedInto as string);
+    if (!next) break;
+    seen.add(String(next._id));
+    person = next;
+  }
+  return String(person._id);
+}
+
+/**
+ * Once a merge reaches the server, gifts and functions still pointing at the merged person
+ * (logged on phones that hadn't heard of the merge) move to the kept one. They get new
+ * sequence numbers, so every phone pulls the move.
+ */
+async function moveToKept(familyId: string, fromId: string, toId: string, userId: string, session: ClientSession) {
+  const moved = { personId: 'entries', hostPersonId: 'events' } as const;
+  for (const [field, table] of Object.entries(moved) as [keyof typeof moved, SyncedTable][]) {
+    const docs = await coll(table).find({ familyId, [field]: fromId, deletedAt: null }, { session }).toArray();
+    for (const d of docs) {
+      if (table === 'entries') await keepHistory(familyId, d, userId, session);
+      const next = { ...d, [field]: toId, updatedAt: Date.now(), seq: await nextSeq(familyId, session) };
+      await coll(table).replaceOne({ _id: d._id }, next, { session });
+    }
+  }
+}
+
 /**
  * Applies a batch of outbox changes. Rules:
  * - new records are inserted (two phones' new entries never conflict: different UUIDs);
  * - an edit replaces the record — the last write to reach the server wins — and for
  *   entries the previous version is kept in entryHistory;
  * - deletes are soft and win: an edit arriving for a deleted record is ignored;
+ * - merges stick like deletes: an edit from a phone that hasn't heard of a merge keeps it,
+ *   gifts logged against a merged person go to the kept one, and a merge that would make
+ *   a loop (two phones merging each other's way) is dropped;
  * - a retry of an identical record changes nothing and gets no new seq.
  */
 export async function applyPush(familyId: string, userId: string, changes: SyncChange[]): Promise<SyncPushResponse> {
@@ -132,6 +179,21 @@ export async function applyPush(familyId: string, userId: string, changes: SyncC
             late.push({ changeId: change.changeId, code: 'CONFLICT', message: 'Record id belongs to another family' });
             continue;
           }
+          if (change.table === 'people') {
+            if (existing?.mergedInto && !doc.mergedInto) doc.mergedInto = existing.mergedInto;
+            if (doc.mergedInto && doc.mergedInto !== existing?.mergedInto) {
+              const kept = await keptPerson(familyId, doc.mergedInto, session);
+              if (!kept) {
+                late.push({ changeId: change.changeId, code: 'VALIDATION', message: 'Merged into a person who isn’t in this ledger' });
+                continue;
+              }
+              doc.mergedInto = kept === doc._id ? null : kept;
+            }
+          } else if (change.table === 'entries') {
+            doc.personId = (await keptPerson(familyId, doc.personId, session)) ?? doc.personId;
+          } else if (change.table === 'events' && doc.hostPersonId) {
+            doc.hostPersonId = (await keptPerson(familyId, doc.hostPersonId, session)) ?? doc.hostPersonId;
+          }
           let stored: Document;
           if (!existing) {
             if (change.table === 'entries') doc.createdBy = userId;
@@ -145,16 +207,12 @@ export async function applyPush(familyId: string, userId: string, changes: SyncC
               stored = existing; // a retry
             } else {
               stored = { ...doc, seq: await nextSeq(familyId, session) };
-              if (change.table === 'entries') {
-                await db()
-                  .collection(HISTORY)
-                  .insertOne(
-                    { _id: randomUUID() as never, familyId, entryId: existing._id, version: toRecord(existing), replacedAt: Date.now(), replacedBy: userId },
-                    { session },
-                  );
-              }
+              if (change.table === 'entries') await keepHistory(familyId, existing, userId, session);
               await c.replaceOne({ _id: doc._id }, stored, { session });
             }
+          }
+          if (change.table === 'people' && stored.mergedInto && stored.mergedInto !== existing?.mergedInto) {
+            await moveToKept(familyId, String(stored._id), stored.mergedInto as string, userId, session);
           }
           accepted.push(change.changeId);
           touched.set(`${change.table}:${String(doc._id)}`, { table: change.table, record: toRecord(stored) });

@@ -80,6 +80,8 @@ function App() {
           <Stack.Screen name="events/[id]/cash" />
           <Stack.Screen name="people/[id]/index" />
           <Stack.Screen name="people/[id]/edit" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="people/duplicates" />
+          <Stack.Screen name="people/merge" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="scan-invite" options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="family/index" />
           <Stack.Screen name="family/switch" options={{ animation: 'slide_from_bottom' }} />

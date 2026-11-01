@@ -35,6 +35,11 @@ export function todayISO(now = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Epoch ms → "14 Feb 2026, 8:42 pm", on the phone's calendar and clock. */
+export function formatDateTime(ms: number): string {
+  return `${formatDate(todayISO(new Date(ms)))}, ${formatTime(ms)}`;
+}
+
 export function dateToISO(date: Date): string {
   return todayISO(date);
 }

@@ -10,9 +10,9 @@ import { Chip, ChipRow } from '@/components/Choice';
 import { EmptyState, TabHeading } from '@/components/layout';
 import { Avatar } from '@/components/ledger';
 import { getDb } from '@/db/client';
-import { getPeopleSummaries } from '@/db/ledger';
+import { getDuplicateSuggestions, getPeopleSummaries } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
-import { useFamilyId } from '@/store/session';
+import { useCanEdit, useFamilyId } from '@/store/session';
 import { colors, fonts, radius, space } from '@/theme';
 import { useSyncRefresh } from '@/lib/useSyncRefresh';
 
@@ -23,7 +23,13 @@ export default function PeopleScreen() {
   const familyId = useFamilyId();
   const [query, setQuery] = useState('');
   const [relation, setRelation] = useState<string | null>(null);
+  const canEdit = useCanEdit();
   const people = useDbQuery(() => getPeopleSummaries(getDb(), familyId), ['people', 'entries'], [familyId]);
+  const duplicates = useDbQuery(
+    () => (canEdit ? getDuplicateSuggestions(getDb(), familyId).length : 0),
+    ['people', 'entries', 'app_settings'],
+    [familyId, canEdit],
+  );
   const search = useMemo(() => createPersonSearch(people), [people]);
 
   // Relation filters: the presets in use first, then any custom relations people have.
@@ -75,6 +81,27 @@ export default function PeopleScreen() {
         keyExtractor={(p) => p.id}
         keyboardShouldPersistTaps="handled"
         ItemSeparatorComponent={() => <View style={styles.sep} />}
+        ListHeaderComponent={
+          duplicates > 0 && !query.trim() ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${t('duplicates.banner', { count: duplicates })}. ${t('duplicates.bannerHint')}`}
+              onPress={() => router.push('/people/duplicates')}
+              style={({ pressed }) => [styles.banner, pressed && { backgroundColor: colors.marigoldTint }]}
+            >
+              <Feather name="git-merge" size={20} color={colors.marigoldInk} />
+              <View style={{ flex: 1 }}>
+                <AppText variant="bodyStrong" weight="bold" color={colors.onMarigold}>
+                  {t('duplicates.banner', { count: duplicates })}
+                </AppText>
+                <AppText variant="caption" color={colors.marigoldInk}>
+                  {t('duplicates.bannerHint')}
+                </AppText>
+              </View>
+              <Feather name="chevron-right" size={18} color={colors.marigoldInk} />
+            </Pressable>
+          ) : undefined
+        }
         ListFooterComponent={
           people.length > 0 ? (
             <AppText variant="caption" color={colors.inkMuted} align="center" style={{ marginTop: space.md }}>
@@ -126,6 +153,17 @@ const styles = StyleSheet.create({
   search: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 48, borderRadius: radius.button, backgroundColor: colors.ground, paddingHorizontal: 14 },
   searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 17, color: colors.ink, paddingVertical: 0 },
   list: { padding: space.xl, flexGrow: 1 },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    padding: 14,
+    marginBottom: space.md,
+    borderRadius: radius.card,
+    borderWidth: 1.5,
+    borderColor: colors.marigold,
+    backgroundColor: colors.surface,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

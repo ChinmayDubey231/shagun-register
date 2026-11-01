@@ -10,7 +10,7 @@ import { Segmented } from '@/components/Choice';
 import { EmptyState, IconButton, ScreenHeader } from '@/components/layout';
 import { Avatar, DateBadge } from '@/components/ledger';
 import { getDb } from '@/db/client';
-import { getPerson, getPersonHistory, getUpcomingForPerson } from '@/db/ledger';
+import { getKeptPerson, getPersonHistory, getUpcomingForPerson } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
 import { formatDate, formatMonthYear, todayISO } from '@/lib/format';
 import { useCanEdit, useFamilyId } from '@/store/session';
@@ -24,11 +24,13 @@ export default function PersonHistoryScreen() {
   const refreshControl = useSyncRefresh();
   const { t } = useTranslation();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
   const familyId = useFamilyId();
   const canEdit = useCanEdit();
   const [filter, setFilter] = useState<Filter>('all');
-  const person = useDbQuery(() => getPerson(getDb(), familyId, id), ['people'], [familyId, id]);
+  // A link to a merged duplicate opens the person it was merged into.
+  const person = useDbQuery(() => getKeptPerson(getDb(), familyId, params.id), ['people'], [familyId, params.id]);
+  const id = person?.id ?? params.id;
   const history = useDbQuery(() => getPersonHistory(getDb(), id), ['entries', 'events'], [id]);
   const upcoming = useDbQuery(() => getUpcomingForPerson(getDb(), familyId, id, todayISO()), ['events'], [familyId, id]);
 
@@ -60,11 +62,12 @@ export default function PersonHistoryScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top']}>
       <ScreenHeader
         right={
-          !canEdit ? undefined : <IconButton
-            icon="edit-2"
-            label={t('person.edit')}
-            onPress={() => router.push({ pathname: '/people/[id]/edit', params: { id } })}
-          />
+          !canEdit ? undefined : (
+            <View style={styles.actions}>
+              <IconButton icon="git-merge" label={t('merge.fromPerson')} onPress={() => router.push({ pathname: '/people/merge', params: { a: id } })} />
+              <IconButton icon="edit-2" label={t('person.edit')} onPress={() => router.push({ pathname: '/people/[id]/edit', params: { id } })} />
+            </View>
+          )
         }
       />
       <FlatList
@@ -218,6 +221,7 @@ export default function PersonHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  actions: { flexDirection: 'row' },
   head: {
     paddingHorizontal: space.xl,
     paddingBottom: space.lg,

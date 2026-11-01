@@ -14,6 +14,12 @@ import { eq } from 'drizzle-orm';
 import {
   addCashCount,
   addJoinedFamily,
+  countHostedEvents,
+  getDuplicateSuggestions,
+  getKeptPerson,
+  getPerson,
+  markNotDuplicates,
+  mergePeople,
   applyServerFamilies,
   createPerson,
   listLocalFamilies,
@@ -428,5 +434,83 @@ describe('Week 3: accounts on this phone', () => {
     expect(() => addEntry(viewer, gift(event.id, { newPersonName: 'X' }))).toThrow(LedgerError);
     expect(() => createPerson(viewer, { displayName: 'X' })).toThrow('Viewers');
     expect(getEventSummary(db, ctx.familyId, event.id)!.entryCount).toBe(0);
+  });
+});
+
+describe('Week 5: duplicate merge', () => {
+  /** "Ramesh Sharma" logged in English at our wedding and "रमेश शर्मा" in Hindi at theirs. */
+  function twoSpellings() {
+    const ours = hostedWedding();
+    const english = addEntry(ctx, gift(ours.id, { newPersonName: 'Ramesh Sharma', amount: 2100 })).person;
+    const theirs = createEvent(ctx, {
+      title: 'Sharma ji ka griha pravesh', type: 'griha_pravesh', role: 'attended', hostPersonId: null,
+      hostName: 'रमेश शर्मा', date: '2026-05-01', subFunctions: [], venue: null,
+    });
+    const hindi = getPerson(db, ctx.familyId, theirs.hostPersonId!)!;
+    updatePerson(ctx, hindi.id, { displayName: hindi.displayName, relation: 'mama_ji', city: 'Indore', phone: '9826012345' });
+    addEntry(ctx, gift(theirs.id, { personId: hindi.id, direction: 'given', amount: 1100, subFunction: null }));
+    return { ours, theirs, english, hindi };
+  }
+
+  it('suggests the pair, and forgets it when the family says they are different', () => {
+    const { english, hindi } = twoSpellings();
+    addEntry(ctx, gift(hostedWedding().id, { newPersonName: 'Sunita Mishra' }));
+    const suggestions = getDuplicateSuggestions(db, ctx.familyId);
+    expect(suggestions.map((s) => [s.a.displayName, s.b.displayName, s.reason])).toEqual([['Ramesh Sharma', 'रमेश शर्मा', 'sameName']]);
+    expect(suggestions[0]!.a.received).toBe(2100);
+    expect(suggestions[0]!.b.given).toBe(1100);
+
+    markNotDuplicates(db, hindi.id, english.id);
+    expect(getDuplicateSuggestions(db, ctx.familyId)).toEqual([]);
+    // Phone-only: nothing queued for sync.
+    expect(outboxRows().some((r) => r.payload.includes('notDuplicates'))).toBe(false);
+  });
+
+  it('moves gifts and hosted functions, fills blanks, and leaves mergedInto on the duplicate', () => {
+    const { ours, theirs, english, hindi } = twoSpellings();
+    const queued = outboxRows().length;
+    const kept = mergePeople(ctx, english.id, hindi.id);
+
+    expect(kept).toMatchObject({ id: english.id, displayName: 'Ramesh Sharma', nameDevanagari: 'रमेश शर्मा', city: 'Indore', phone: '9826012345', relation: 'mama_ji' });
+    const history = getPersonHistory(db, english.id);
+    expect(history.map((h) => [h.eventTitle, h.direction, h.amount])).toEqual([
+      ['Sharma ji ka griha pravesh', 'given', 1100],
+      ["Ananya's Wedding", 'received', 2100],
+    ]);
+    expect(getEventSummary(db, ctx.familyId, theirs.id)!.hostName).toBe('Ramesh Sharma');
+    expect(getEventSummary(db, ctx.familyId, ours.id)!.received).toBe(2100);
+
+    // The duplicate is hidden everywhere but kept, pointing at the person kept.
+    expect(getPerson(db, ctx.familyId, hindi.id)!.mergedInto).toBe(english.id);
+    expect(getPeopleSummaries(db, ctx.familyId).map((p) => p.displayName)).toEqual(['Ramesh Sharma']);
+    expect(searchPeople(db, ctx.familyId, 'रमेश').map((p) => p.id)).toEqual([english.id]);
+    expect(getDuplicateSuggestions(db, ctx.familyId)).toEqual([]);
+
+    // Synced like any other change: the moved entry, the moved event, the kept and the merged person.
+    const changes = outboxRows().slice(queued).map((r) => [r.tableName, r.recordId]);
+    expect(changes).toEqual([['entries', expect.any(String)], ['events', theirs.id], ['people', english.id], ['people', hindi.id]]);
+    expect(JSON.parse(outboxRows().at(-1)!.payload).mergedInto).toBe(english.id);
+  });
+
+  it('follows a merge when a screen still holds the old id', () => {
+    const { ours, english, hindi } = twoSpellings();
+    mergePeople(ctx, english.id, hindi.id);
+    expect(getKeptPerson(db, ctx.familyId, hindi.id)!.id).toBe(english.id);
+    const { entry } = addEntry(ctx, gift(ours.id, { personId: hindi.id, amount: 501 }));
+    expect(entry.personId).toBe(english.id);
+    const event = createEvent(ctx, {
+      title: 'Next', type: 'other', role: 'attended', hostPersonId: hindi.id, hostName: null, date: '2027-01-01', subFunctions: [], venue: null,
+    });
+    expect(event.hostPersonId).toBe(english.id);
+    expect(countHostedEvents(db, ctx.familyId, english.id)).toBe(2);
+  });
+
+  it('refuses a merge with itself, of someone already merged, or by a viewer', () => {
+    const { english, hindi } = twoSpellings();
+    expect(() => mergePeople(ctx, english.id, english.id)).toThrow(LedgerError);
+    expect(() => mergePeople({ ...ctx, role: 'viewer' }, english.id, hindi.id)).toThrow('Viewers');
+    mergePeople(ctx, english.id, hindi.id);
+    expect(() => mergePeople(ctx, english.id, hindi.id)).toThrow('no longer');
+    expect(() => mergePeople(ctx, hindi.id, english.id)).toThrow('no longer');
   });
 });

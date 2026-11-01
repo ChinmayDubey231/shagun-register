@@ -26,7 +26,10 @@ import {
   deleteEntry,
   getEventEntries,
   getEventSummary,
+  getPeopleSummaries,
+  getPersonHistory,
   markFamilyRegistered,
+  mergePeople,
   updateEntry,
   type LedgerContext,
   type LedgerDb,
@@ -329,5 +332,56 @@ describe('Week 4: interrupted syncs lose and double nothing', () => {
     expect(countRejected(a.db)).toBe(1);
     expect(countUnsynced(a.db)).toBe(0);
     expect((await a.sync()).pushed).toBe(0); // not re-sent
+  });
+});
+
+describe('Week 5: a merge reaches every phone', () => {
+  const giftFor = (eventId: string, personId: string, amount: number) => ({
+    eventId, personId, newPersonName: null, relation: null, direction: 'received' as const,
+    amount, mode: 'cash' as const, itemNote: null, subFunction: null, note: null,
+  });
+  const people = (p: Phone, familyId: string) => getPeopleSummaries(p.db, familyId).map((x) => [x.displayName, x.received]);
+
+  async function twoSpellings() {
+    const phones = await twoPhonesOneLedger();
+    const english = phones.a.log(phones.eventId, 'Ramesh Sharma', 2100).person;
+    const hindi = phones.a.log(phones.eventId, 'रमेश शर्मा', 1100).person;
+    await phones.a.sync();
+    await phones.b.sync();
+    return { ...phones, english, hindi };
+  }
+
+  it('a gift logged offline against the duplicate ends up with the kept person on both phones', async () => {
+    const { a, b, familyId, eventId, english, hindi } = await twoSpellings();
+    b.online = false;
+    mergePeople(a.ctx, english.id, hindi.id);
+    addEntry(b.ctx, giftFor(eventId, hindi.id, 501)); // B hasn't heard of the merge
+    await a.sync();
+    b.online = true;
+    await b.sync();
+    await a.sync();
+
+    for (const p of [a, b]) {
+      expect(people(p, familyId), p.name).toEqual([['Ramesh Sharma', 3701]]);
+      expect(getPersonHistory(p.db, english.id)).toHaveLength(3);
+      expect(countUnsynced(p.db)).toBe(0);
+      expect(countRejected(p.db)).toBe(0);
+    }
+  });
+
+  it('two phones merging the same pair opposite ways settle on one person', async () => {
+    const { a, b, familyId, english, hindi } = await twoSpellings();
+    a.online = b.online = false;
+    mergePeople(a.ctx, english.id, hindi.id); // A keeps the English spelling
+    mergePeople(b.ctx, hindi.id, english.id); // B keeps the Hindi one
+    a.online = b.online = true;
+    await a.sync();
+    await b.sync();
+    await a.sync();
+
+    for (const p of [a, b]) {
+      expect(people(p, familyId), p.name).toEqual([['Ramesh Sharma', 3200]]);
+      expect(countRejected(p.db)).toBe(0);
+    }
   });
 });

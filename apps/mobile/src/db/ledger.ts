@@ -5,11 +5,14 @@ import {
   createEventInputSchema,
   createPersonSearch,
   exactKeyMatches,
+  findDuplicatePairs,
   hasDevanagari,
   matchKey,
   MATCH_KEY_VERSION,
+  pairKey,
   personEditSchema,
   quickEntryInputSchema,
+  type DuplicatePair,
   type FamilySummary,
   type MemberRole,
   type SyncedTable,
@@ -274,6 +277,13 @@ function findPerson(tx: Writer, familyId: string, id: string) {
     .get();
 }
 
+/** Like findPerson, but follows a merge to the person that was kept (a screen may still hold the old id). */
+function findKeptPerson(tx: Writer, familyId: string, id: string) {
+  let person = findPerson(tx, familyId, id);
+  for (let hops = 0; person?.mergedInto && hops < 10; hops++) person = findPerson(tx, familyId, person.mergedInto);
+  return person;
+}
+
 export function createPerson(
   ctx: LedgerContext,
   input: { displayName: string; relation?: string | null; city?: string | null },
@@ -292,10 +302,9 @@ export function createEvent(ctx: LedgerContext, raw: unknown): EventRow {
     let hostPersonId: string | null = null;
     if (input.role === 'attended') {
       if (input.hostPersonId) {
-        if (!findPerson(tx, ctx.familyId, input.hostPersonId)) {
-          throw new LedgerError('NOT_FOUND', 'That person is no longer in the ledger', 'hostName');
-        }
-        hostPersonId = input.hostPersonId;
+        const host = findKeptPerson(tx, ctx.familyId, input.hostPersonId);
+        if (!host) throw new LedgerError('NOT_FOUND', 'That person is no longer in the ledger', 'hostName');
+        hostPersonId = host.id;
       } else {
         hostPersonId = insertPerson(tx, ctx, { displayName: input.hostName ?? '' }).id;
       }
@@ -377,7 +386,7 @@ function assertEvent(tx: Writer, ctx: LedgerContext, eventId: string) {
 /** The existing person (relation updated if it changed) or a newly created one. */
 function resolvePerson(tx: Writer, ctx: LedgerContext, input: QuickEntryData) {
   if (input.personId) {
-    let person = findPerson(tx, ctx.familyId, input.personId);
+    let person = findKeptPerson(tx, ctx.familyId, input.personId);
     if (!person) throw new LedgerError('NOT_FOUND', 'That person is no longer in the ledger', 'personId');
     const relation = input.relation?.trim() || null;
     if (relation && relation !== person.relation) {
@@ -661,6 +670,11 @@ export function getPerson(db: LedgerDb, familyId: string, personId: string) {
   return findPerson(db, familyId, personId);
 }
 
+/** The person, or the one they were merged into: a link to a merged duplicate opens the kept person. */
+export function getKeptPerson(db: LedgerDb, familyId: string, personId: string) {
+  return findKeptPerson(db, familyId, personId);
+}
+
 export interface PersonHistoryItem {
   id: string;
   eventId: string;
@@ -692,6 +706,52 @@ export function getPersonHistory(db: LedgerDb, personId: string): PersonHistoryI
     .innerJoin(events, eq(events.id, entries.eventId))
     .where(and(eq(entries.personId, personId), isNull(entries.deletedAt), isNull(events.deletedAt)))
     .orderBy(desc(events.date), desc(entries.createdAt))
+    .all();
+}
+
+export interface LedgerGift {
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  eventDate: string;
+  personId: string;
+  personName: string;
+  city: string | null;
+  relation: string | null;
+  direction: EntryRow['direction'];
+  amount: number;
+  mode: EntryRow['mode'];
+  itemNote: string | null;
+  subFunction: string | null;
+  note: string | null;
+  createdAt: number;
+}
+
+/** Every live gift in the ledger, oldest function first: the rows of the Excel export. */
+export function getAllGifts(db: LedgerDb, familyId: string): LedgerGift[] {
+  return db
+    .select({
+      id: entries.id,
+      eventId: events.id,
+      eventTitle: events.title,
+      eventDate: events.date,
+      personId: people.id,
+      personName: people.displayName,
+      city: people.city,
+      relation: people.relation,
+      direction: entries.direction,
+      amount: entries.amount,
+      mode: entries.mode,
+      itemNote: entries.itemNote,
+      subFunction: entries.subFunction,
+      note: entries.note,
+      createdAt: entries.createdAt,
+    })
+    .from(entries)
+    .innerJoin(events, eq(events.id, entries.eventId))
+    .innerJoin(people, eq(people.id, entries.personId))
+    .where(and(eq(entries.familyId, familyId), isNull(entries.deletedAt), isNull(events.deletedAt)))
+    .orderBy(asc(events.date), asc(entries.createdAt))
     .all();
 }
 
@@ -755,6 +815,101 @@ export function getUpcomingForPerson(db: LedgerDb, familyId: string, personId: s
     )
     .orderBy(asc(events.date))
     .all();
+}
+
+// ---------------------------------------------------------------------------
+// Duplicate merge
+// ---------------------------------------------------------------------------
+
+const SETTING_NOT_DUPLICATES = 'notDuplicates';
+
+function notDuplicates(db: Writer): Set<string> {
+  const raw = getSetting(db, SETTING_NOT_DUPLICATES);
+  return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+}
+
+/**
+ * People who are probably the same (same match key and no conflicting city, or the same
+ * phone number), minus pairs the family said are different. Merges are only suggested.
+ */
+export function getDuplicateSuggestions(db: LedgerDb, familyId: string): DuplicatePair<PersonSummary>[] {
+  const dismissed = notDuplicates(db);
+  return findDuplicatePairs(getPeopleSummaries(db, familyId)).filter((p) => !dismissed.has(pairKey(p.a.id, p.b.id)));
+}
+
+/** "Not the same person": stops suggesting this pair. Kept on this phone only. */
+export function markNotDuplicates(db: LedgerDb, a: string, b: string) {
+  const dismissed = notDuplicates(db);
+  dismissed.add(pairKey(a, b));
+  setSetting(db, SETTING_NOT_DUPLICATES, JSON.stringify([...dismissed]));
+}
+
+/** Functions this person hosted (they move with a merge). */
+export function countHostedEvents(db: LedgerDb, familyId: string, personId: string): number {
+  return (
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(events)
+      .where(and(eq(events.familyId, familyId), eq(events.hostPersonId, personId), isNull(events.deletedAt)))
+      .get()?.n ?? 0
+  );
+}
+
+/**
+ * Merges a duplicate into the person kept. Their gifts and the functions they hosted move
+ * across, blanks on the kept person (city, phone, relation, Hindi name) are filled from the
+ * duplicate, and the duplicate stays with mergedInto set instead of being deleted. Every
+ * change is queued, so the merge syncs like any other edit; the server also moves anything
+ * other phones log against the duplicate before they hear of the merge.
+ */
+export function mergePeople(ctx: LedgerContext, keepId: string, mergeId: string): PersonRow {
+  assertCanWrite(ctx);
+  if (keepId === mergeId) throw new LedgerError('VALIDATION', 'Pick two different people', 'personId');
+  return ctx.db.transaction((tx) => {
+    const keep = findPerson(tx, ctx.familyId, keepId);
+    const dup = findPerson(tx, ctx.familyId, mergeId);
+    if (!keep || !dup || keep.mergedInto || dup.mergedInto) {
+      throw new LedgerError('NOT_FOUND', 'That person is no longer in the ledger', 'personId');
+    }
+    const at = ctx.now();
+    const gifts = tx
+      .select()
+      .from(entries)
+      .where(and(eq(entries.familyId, ctx.familyId), eq(entries.personId, mergeId), isNull(entries.deletedAt)))
+      .all();
+    for (const entry of gifts) {
+      const moved: EntryRow = { ...entry, personId: keepId, updatedAt: at };
+      tx.update(entries).set({ personId: keepId, updatedAt: at }).where(eq(entries.id, entry.id)).run();
+      queue(tx, 'entries', moved, 'upsert', at);
+    }
+    const hosted = tx
+      .select()
+      .from(events)
+      .where(and(eq(events.familyId, ctx.familyId), eq(events.hostPersonId, mergeId), isNull(events.deletedAt)))
+      .all();
+    for (const event of hosted) {
+      const moved: EventRow = { ...event, hostPersonId: keepId, updatedAt: at };
+      tx.update(events).set({ hostPersonId: keepId, updatedAt: at }).where(eq(events.id, event.id)).run();
+      queue(tx, 'events', moved, 'upsert', at);
+    }
+
+    let kept = keep;
+    const filled = {
+      city: keep.city ?? dup.city,
+      phone: keep.phone ?? dup.phone,
+      relation: keep.relation ?? dup.relation,
+      nameDevanagari: keep.nameDevanagari ?? dup.nameDevanagari,
+    };
+    if ((Object.keys(filled) as (keyof typeof filled)[]).some((k) => filled[k] !== keep[k])) {
+      kept = { ...keep, ...filled, updatedAt: at };
+      tx.update(people).set({ ...filled, updatedAt: at }).where(eq(people.id, keepId)).run();
+      queue(tx, 'people', kept, 'upsert', at);
+    }
+    const merged: PersonRow = { ...dup, mergedInto: keepId, updatedAt: at };
+    tx.update(people).set({ mergedInto: keepId, updatedAt: at }).where(eq(people.id, mergeId)).run();
+    queue(tx, 'people', merged, 'upsert', at);
+    return kept;
+  });
 }
 
 // ---------------------------------------------------------------------------

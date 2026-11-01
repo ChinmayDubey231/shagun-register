@@ -3,7 +3,7 @@ import { formatINR } from '@shagun/shared';
 import { useTranslation } from 'react-i18next';
 import { useSyncStatus } from '@/lib/sync';
 import { Pressable, StyleSheet, View } from 'react-native';
-import type { EntryListItem, EventSummary } from '@/db/ledger';
+import type { EntryListItem, EventSummary, PersonSummary } from '@/db/ledger';
 import { dateBadgeParts, formatDate, formatTime, initials, todayISO } from '@/lib/format';
 import { colors, directionColors, radius, space } from '@/theme';
 import { AppText } from './AppText';
@@ -173,6 +173,46 @@ export function EntryRow({ item, onLongPress, onPress }: { item: EntryListItem; 
   );
 }
 
+/** A person and what went each way, for the merge screens: name, city · relation · phone, ↗ given, ↙ received. */
+export function PersonTotals({ person }: { person: PersonSummary }) {
+  const { t } = useTranslation();
+  const sub = [
+    person.city,
+    person.relation ? t(`relation.${person.relation}` as 'relation.friend', { defaultValue: person.relation }) : null,
+    person.phone,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const exchanges = t('merge.exchanges', { count: person.exchanges });
+  return (
+    <View
+      accessible
+      accessibilityLabel={[person.displayName, sub, exchanges, `${t('direction.youGave')} ${formatINR(person.given)}`, `${t('direction.theyGave')} ${formatINR(person.received)}`]
+        .filter(Boolean)
+        .join(', ')}
+      style={styles.personTotals}
+    >
+      <Avatar name={person.displayName} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <AppText variant="bodyStrong" weight="bold" numberOfLines={1}>
+          {person.displayName}
+        </AppText>
+        <AppText variant="caption" color={colors.inkMuted} numberOfLines={1}>
+          {[sub, exchanges].filter(Boolean).join(' · ')}
+        </AppText>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <AppText variant="caption" weight="bold" color={colors.given} tabular>
+          ↗ {person.given ? formatINR(person.given) : '—'}
+        </AppText>
+        <AppText variant="caption" weight="bold" color={colors.received} tabular>
+          ↙ {person.received ? formatINR(person.received) : '—'}
+        </AppText>
+      </View>
+    </View>
+  );
+}
+
 export function EventCard({ event, upcoming, onPress }: { event: EventSummary; upcoming: boolean; onPress: () => void }) {
   const { t } = useTranslation();
   const direction: Direction = event.role === 'hosted' ? 'received' : 'given';
@@ -249,6 +289,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
     backgroundColor: colors.surface,
   },
+  personTotals: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: 14, paddingVertical: space.md, minHeight: 64 },
   eventCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,
