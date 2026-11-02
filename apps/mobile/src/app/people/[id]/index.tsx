@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Segmented } from '@/components/Choice';
 import { EmptyState, IconButton, ScreenHeader } from '@/components/layout';
-import { Avatar, DateBadge } from '@/components/ledger';
+import { Avatar, DateBadge, withArrows } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { getKeptPerson, getPersonHistory, getUpcomingForPerson } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
@@ -99,7 +99,7 @@ export default function PersonHistoryScreen() {
               <View style={styles.totals}>
                 <View style={[styles.totalBox, { backgroundColor: colors.givenTint }]}>
                   <AppText variant="caption" weight="bold" color={colors.given}>
-                    {t('person.youGave', { count: given.length })}
+                    {withArrows(t('person.youGave', { count: given.length }), 13)}
                   </AppText>
                   <AppText variant="title" style={{ fontSize: 24, lineHeight: 30 }} color={colors.given} tabular>
                     {formatINR(sumAmounts(given.map((g) => g.amount)))}
@@ -107,7 +107,7 @@ export default function PersonHistoryScreen() {
                 </View>
                 <View style={[styles.totalBox, { backgroundColor: colors.receivedTint }]}>
                   <AppText variant="caption" weight="bold" color={colors.received}>
-                    {t('person.theyGave', { count: received.length })}
+                    {withArrows(t('person.theyGave', { count: received.length }), 13)}
                   </AppText>
                   <AppText variant="title" style={{ fontSize: 24, lineHeight: 30 }} color={colors.received} tabular>
                     {formatINR(sumAmounts(received.map((r) => r.amount)))}
@@ -208,7 +208,7 @@ export default function PersonHistoryScreen() {
                     {amount}
                   </AppText>
                   <AppText variant="tiny" color={c.fg}>
-                    {item.direction === 'given' ? `↗ ${t('direction.youGave')}` : `↙ ${t('direction.theyGave')}`}
+                    {withArrows(item.direction === 'given' ? `↗ ${t('direction.youGave')}` : `↙ ${t('direction.theyGave')}`, 12)}
                   </AppText>
                 </View>
               </Pressable>

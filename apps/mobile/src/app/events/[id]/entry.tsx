@@ -22,7 +22,7 @@ import { Chip, ChipRow, Segmented } from '@/components/Choice';
 import { Field } from '@/components/Field';
 import { Keypad } from '@/components/Keypad';
 import { EmptyState, ScreenHeader } from '@/components/layout';
-import { Avatar } from '@/components/ledger';
+import { Avatar, withArrows } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import {
   addEntry,
@@ -362,15 +362,18 @@ export default function QuickEntryScreen() {
                           {p.displayName}
                         </AppText>
                         <AppText variant="caption" color={colors.inkMuted}>
-                          {[
-                            p.city,
-                            p.relation ? t(`relation.${p.relation}` as 'relation.friend', { defaultValue: p.relation }) : null,
-                            p.lastAmount !== null && p.lastDirection
-                              ? `${p.lastDirection === 'given' ? '↗' : '↙'} ${formatINR(p.lastAmount)}`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ') || ' '}
+                          {withArrows(
+                            [
+                              p.city,
+                              p.relation ? t(`relation.${p.relation}` as 'relation.friend', { defaultValue: p.relation }) : null,
+                              p.lastAmount !== null && p.lastDirection
+                                ? `${p.lastDirection === 'given' ? '↗' : '↙'} ${formatINR(p.lastAmount)}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ') || ' ',
+                            13,
+                          )}
                         </AppText>
                       </View>
                     </Pressable>

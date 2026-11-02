@@ -1,5 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { formatINR } from '@shagun/shared';
+import type { ComponentProps, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSyncStatus } from '@/lib/sync';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -9,6 +10,62 @@ import { colors, directionColors, radius, space } from '@/theme';
 import { AppText } from './AppText';
 
 type Direction = 'received' | 'given';
+
+const ARROW_ICONS: Record<string, ComponentProps<typeof Feather>['name']> = {
+  '↗': directionColors.given.icon,
+  '↙': directionColors.received.icon,
+};
+
+/**
+ * Puts icon arrows in place of ↗ / ↙ in a line of text, at the text's size. Mukta has no
+ * arrows, and Android draws them from a fallback font at about half size, too small to
+ * carry the direction they stand for.
+ */
+export function withArrows(text: string, size: number): ReactNode[] {
+  return text
+    .split(/([↗↙])/)
+    .filter(Boolean)
+    .map((part, i) => {
+      const icon = ARROW_ICONS[part];
+      return icon ? <Feather key={i} name={icon} size={size} /> : part;
+    });
+}
+
+/**
+ * A person's ↗ given over ↙ received. A side with nothing in it is left out rather than shown
+ * as a dash (one amount then centres beside the name), and someone with neither says so quietly.
+ */
+export function GiveTake({ given, received }: { given: number; received: number }) {
+  const { t } = useTranslation();
+  return (
+    <View style={{ alignItems: 'flex-end' }}>
+      {given ? (
+        <AppText variant="caption" weight="bold" color={colors.given} tabular>
+          {withArrows(`↗ ${formatINR(given)}`, 13)}
+        </AppText>
+      ) : null}
+      {received ? (
+        <AppText variant="caption" weight="bold" color={colors.received} tabular>
+          {withArrows(`↙ ${formatINR(received)}`, 13)}
+        </AppText>
+      ) : null}
+      {!given && !received ? (
+        <AppText variant="caption" color={colors.inkSubtle}>
+          {t('people.noGifts')}
+        </AppText>
+      ) : null}
+    </View>
+  );
+}
+
+/** GiveTake for a screen reader: "you gave ₹3,200, they gave ₹4,300", leaving out an empty side. */
+export function giveTakeLabel(t: ReturnType<typeof useTranslation>['t'], given: number, received: number): string {
+  const parts = [
+    given ? `${t('direction.youGave')} ${formatINR(given)}` : null,
+    received ? `${t('direction.theyGave')} ${formatINR(received)}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(', ') : t('people.noGifts');
+}
 
 /** ↙ / ↗ tile. Direction is shown by the arrow and the colour, never colour alone. */
 export function DirectionTile({ direction, size = 40 }: { direction: Direction; size?: number }) {
@@ -187,9 +244,7 @@ export function PersonTotals({ person }: { person: PersonSummary }) {
   return (
     <View
       accessible
-      accessibilityLabel={[person.displayName, sub, exchanges, `${t('direction.youGave')} ${formatINR(person.given)}`, `${t('direction.theyGave')} ${formatINR(person.received)}`]
-        .filter(Boolean)
-        .join(', ')}
+      accessibilityLabel={[person.displayName, sub, exchanges, giveTakeLabel(t, person.given, person.received)].filter(Boolean).join(', ')}
       style={styles.personTotals}
     >
       <Avatar name={person.displayName} />
@@ -201,14 +256,7 @@ export function PersonTotals({ person }: { person: PersonSummary }) {
           {[sub, exchanges].filter(Boolean).join(' · ')}
         </AppText>
       </View>
-      <View style={{ alignItems: 'flex-end' }}>
-        <AppText variant="caption" weight="bold" color={colors.given} tabular>
-          ↗ {person.given ? formatINR(person.given) : '—'}
-        </AppText>
-        <AppText variant="caption" weight="bold" color={colors.received} tabular>
-          ↙ {person.received ? formatINR(person.received) : '—'}
-        </AppText>
-      </View>
+      <GiveTake given={person.given} received={person.received} />
     </View>
   );
 }

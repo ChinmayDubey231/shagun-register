@@ -233,6 +233,7 @@
     "count_other": "{{count}} in ledger",
     "search": "Search people",
     "legend": "↗ given by you · ↙ received from them",
+    "noGifts": "No gifts yet",
     "emptyTitle": "No people yet",
     "emptyBody": "People are added when you log a gift or create an event for another family."
   },
@@ -347,8 +348,12 @@
     "title": "More",
     "ledger": "Family ledger",
     "onPhone": "Saved on this phone",
-    "comingNext": "Coming in later builds",
-    "comingNextBody": "Hindi and app lock.",
+    "language": "Language",
+    "languageHint": "Saved to your account, so your other phones switch too.",
+    "appLock": "App lock",
+    "appLockHint": "Ask for your fingerprint, face or phone PIN when the app opens, or after a minute away.",
+    "appLockUnavailable": "Set a screen lock (PIN, pattern or fingerprint) on this phone first.",
+    "appLockWeb": "App lock works in the phone app, not the web preview.",
     "version": "Version {{version}}",
     "account": "Account",
     "signOut": "Sign out",
@@ -403,7 +408,17 @@
     "devName": "Name",
     "devEmail": "Email",
     "devButton": "Sign in for testing",
-    "needsInternet": "Signing in needs the internet once. After that the app works offline."
+    "needsInternet": "Signing in needs the internet once. After that the app works offline.",
+    "switchLanguage": "हिंदी में देखें"
+  },
+  "lock": {
+    "title": "Shagun Register is locked",
+    "body": "Use your fingerprint, face or phone PIN to open your family's ledger.",
+    "unlock": "Unlock",
+    "prompt": "Unlock Shagun Register",
+    "confirm": "Confirm it's you",
+    "failed": "That didn't work. Try again.",
+    "lockout": "Too many tries. Wait a little, or unlock the phone with its PIN, then try again."
   },
   "family": {
     "title": "Family members",

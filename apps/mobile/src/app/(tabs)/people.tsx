@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { createPersonSearch, formatINR, RELATION_PRESETS } from '@shagun/shared';
+import { createPersonSearch, RELATION_PRESETS } from '@shagun/shared';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Chip, ChipRow } from '@/components/Choice';
 import { EmptyState, TabHeading } from '@/components/layout';
-import { Avatar } from '@/components/ledger';
+import { Avatar, GiveTake, giveTakeLabel, withArrows } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { getDuplicateSuggestions, getPeopleSummaries } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
@@ -105,7 +105,7 @@ export default function PeopleScreen() {
         ListFooterComponent={
           people.length > 0 ? (
             <AppText variant="caption" color={colors.inkMuted} align="center" style={{ marginTop: space.md }}>
-              {t('people.legend')}
+              {withArrows(t('people.legend'), 13)}
             </AppText>
           ) : undefined
         }
@@ -113,7 +113,7 @@ export default function PeopleScreen() {
         renderItem={({ item, index }) => (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`${item.displayName}, ${t('direction.youGave')} ${formatINR(item.given)}, ${t('direction.theyGave')} ${formatINR(item.received)}`}
+            accessibilityLabel={`${item.displayName}, ${giveTakeLabel(t, item.given, item.received)}`}
             onPress={() => router.push({ pathname: '/people/[id]', params: { id: item.id } })}
             style={({ pressed }) => [
               styles.row,
@@ -127,20 +127,16 @@ export default function PeopleScreen() {
               <AppText variant="bodyStrong" weight="bold" numberOfLines={1}>
                 {item.displayName}
               </AppText>
-              <AppText variant="caption" color={colors.inkMuted} numberOfLines={1}>
-                {[item.city, item.relation ? t(`relation.${item.relation}` as 'relation.friend', { defaultValue: item.relation }) : null]
-                  .filter(Boolean)
-                  .join(' · ') || ' '}
-              </AppText>
+              {/* Only when there is something to say, so a bare name centres beside the avatar. */}
+              {item.city || item.relation ? (
+                <AppText variant="caption" color={colors.inkMuted} numberOfLines={1}>
+                  {[item.city, item.relation ? t(`relation.${item.relation}` as 'relation.friend', { defaultValue: item.relation }) : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </AppText>
+              ) : null}
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <AppText variant="caption" weight="bold" color={colors.given} tabular>
-                ↗ {item.given ? formatINR(item.given) : '—'}
-              </AppText>
-              <AppText variant="caption" weight="bold" color={colors.received} tabular>
-                ↙ {item.received ? formatINR(item.received) : '—'}
-              </AppText>
-            </View>
+            <GiveTake given={item.given} received={item.received} />
           </Pressable>
         )}
       />

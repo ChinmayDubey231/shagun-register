@@ -4,8 +4,9 @@ import en from './en.json';
 import hi from './hi.json';
 
 /**
- * English now; Hindi strings are filled in during week 6 (hi.json). Missing Hindi
- * keys fall back to English, so the app never shows a raw key.
+ * English and Hindi. The phone's choice is applied at startup (lib/language.ts); a test
+ * keeps hi.json's keys and placeholders matching en.json, and a missing Hindi key would
+ * still fall back to English rather than show a raw key.
  */
 export const defaultNS = 'translation';
 export const resources = { en: { translation: en }, hi: { translation: hi } } as const;

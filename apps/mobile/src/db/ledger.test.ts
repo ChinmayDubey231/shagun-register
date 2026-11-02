@@ -46,8 +46,12 @@ import {
   getLastExchange,
   getPeopleSummaries,
   getPersonHistory,
+  getPreferences,
   LedgerError,
   loadLocalSetup,
+  markLanguageSaved,
+  setAppLockPreference,
+  setLanguagePreference,
   searchPeople,
   type LedgerContext,
   type LedgerDb,
@@ -512,5 +516,42 @@ describe('Week 5: duplicate merge', () => {
     mergePeople(ctx, english.id, hindi.id);
     expect(() => mergePeople(ctx, english.id, hindi.id)).toThrow('no longer');
     expect(() => mergePeople(ctx, hindi.id, english.id)).toThrow('no longer');
+  });
+});
+
+describe('Week 6: language and app lock on this phone', () => {
+  it('starts with no language chosen and the lock off', () => {
+    expect(getPreferences(db)).toEqual({ language: null, languagePending: false, appLock: false });
+  });
+
+  it('keeps a language chosen here pending until the account has it', () => {
+    setLanguagePreference(db, 'hi', true);
+    expect(getPreferences(db)).toMatchObject({ language: 'hi', languagePending: true });
+    markLanguageSaved(db, 'hi');
+    expect(getPreferences(db)).toMatchObject({ language: 'hi', languagePending: false });
+  });
+
+  it("doesn't mark a newer choice saved when an older one reaches the account", () => {
+    setLanguagePreference(db, 'hi', true);
+    setLanguagePreference(db, 'en', true);
+    markLanguageSaved(db, 'hi');
+    expect(getPreferences(db)).toMatchObject({ language: 'en', languagePending: true });
+  });
+
+  it("takes the account's language without queueing it back", () => {
+    setLanguagePreference(db, 'hi', false);
+    expect(getPreferences(db)).toMatchObject({ language: 'hi', languagePending: false });
+  });
+
+  it('ignores a language value it does not know', () => {
+    db.insert(schema.appSettings).values({ key: 'language', value: 'fr' }).run();
+    expect(getPreferences(db).language).toBeNull();
+  });
+
+  it('remembers the app lock', () => {
+    setAppLockPreference(db, true);
+    expect(getPreferences(db).appLock).toBe(true);
+    setAppLockPreference(db, false);
+    expect(getPreferences(db).appLock).toBe(false);
   });
 });

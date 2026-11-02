@@ -1,6 +1,6 @@
 import { forwardRef, useState } from 'react';
 import { StyleSheet, TextInput, View, type TextInputInstance, type TextInputProps } from 'react-native';
-import { colors, fonts, radius } from '@/theme';
+import { colors, fonts, radius, space } from '@/theme';
 import { AppText } from './AppText';
 
 export interface FieldProps extends TextInputProps {
@@ -36,6 +36,8 @@ export const Field = forwardRef<TextInputInstance, FieldProps>(function Field(
         }}
         style={[
           styles.input,
+          // Android's default padding grows a one-line field past 52, out of line with the date button beside it.
+          rest.multiline ? null : { paddingVertical: 0 },
           { borderColor: error ? colors.danger : focused ? colors.sindoor : colors.lineStrong },
           focused || error ? { borderWidth: 2 } : null,
           style,
@@ -56,7 +58,8 @@ export const Field = forwardRef<TextInputInstance, FieldProps>(function Field(
 });
 
 const styles = StyleSheet.create({
-  wrap: { gap: 6 },
+  // Same label gap as the forms' chip and date groups, so fields side by side line up.
+  wrap: { gap: space.sm },
   input: {
     minHeight: 52,
     borderRadius: radius.input,

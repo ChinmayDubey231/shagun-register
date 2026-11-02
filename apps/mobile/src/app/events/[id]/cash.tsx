@@ -12,7 +12,7 @@ import { getDb } from '@/db/client';
 import { addCashCount, getCashCounts, getCashEntries, getCashSummary, getEventSummary, LedgerError } from '@/db/ledger';
 import { useDbQuery } from '@/db/useDbQuery';
 import { errorMessage } from '@/i18n';
-import { formatTime } from '@/lib/format';
+import { formatShortDateTime, formatTime } from '@/lib/format';
 import { useLedgerContext } from '@/store/session';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -191,7 +191,7 @@ export default function CashReconciliationScreen() {
                 </AppText>
                 {counts.map((c) => (
                   <View key={c.id} style={styles.rowBetween}>
-                    <AppText variant="meta">{new Date(c.countedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + ', ' + formatTime(c.countedAt)}</AppText>
+                    <AppText variant="meta">{formatShortDateTime(c.countedAt)}</AppText>
                     <AppText variant="meta" weight="bold" tabular>
                       {formatINR(c.countedAmount)}
                     </AppText>

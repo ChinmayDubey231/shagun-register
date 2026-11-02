@@ -8,9 +8,9 @@ A private family ledger for wedding and function gifts: log what you receive and
 
 React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript throughout.
 
-## Status: Week 5 done (merge, invite cards, exports)
+## Status: Week 6 done (Hindi, app lock)
 
-Weeks 1–5 are complete: an offline ledger, Hindi/English name matching, accounts and shared ledgers, sync between phones, and now duplicate merging, invite-card scanning and PDF/Excel exports. Between weeks 4 and 5 the app also had a design pass:
+Weeks 1–6 are complete: an offline ledger, Hindi/English name matching, accounts and shared ledgers, sync between phones, duplicate merging, invite-card scanning and PDF/Excel exports, and now the whole app in Hindi and an app lock. Between weeks 4 and 5 the app also had a design pass:
 
 - **Sign-in opening animation:**
   - The toran thread draws, marigolds drop and sway, the श mark pops, and a ₹ shagun coin lands with a glint.
@@ -25,6 +25,30 @@ Weeks 1–5 are complete: an offline ledger, Hindi/English name matching, accoun
   - **Android subtitle:** "शगुन रजिस्टर" on sign-in is no longer cut to "शगुन". Android rounded the reveal box's width down a fraction of a pixel and wrapped the last word onto a clipped line.
 
 ## What each week delivered
+
+### Week 6: Hindi and app lock
+
+**Done when** the whole app reads in Hindi, a language chosen on one phone follows the account to the others, and a phone with App lock on asks for its fingerprint, face or PIN before showing the ledger. These checks prove it:
+- **Translation tests** (`apps/mobile/src/i18n/i18n.test.ts`): `hi.json` has exactly the keys `en.json` has, the same `{{placeholders}}`, a form for each Hindi plural category, and Hindi text rather than copied English.
+- **Phone tests** (`apps/mobile/src/db/ledger.test.ts`): a language chosen on the phone stays pending until the account has it, an older save doesn't clear a newer choice, the account's language is taken without being sent back, an unknown value is ignored, and the lock setting is remembered.
+- **A browser run** (web preview, real API and MongoDB), with no page errors:
+  - *हिंदी में देखें* on sign-in switches the screen to Hindi, and after developer sign-in the account's language is `hi`.
+  - Setup, Home, a new event, Quick Entry, Events, People and More all show in Hindi, and a reload keeps it.
+  - Choosing English on More switches the app at once and saves `en` to the account.
+
+What it does:
+- **Hindi** (`apps/mobile/src/i18n/hi.json`):
+  - **Coverage:** every screen and message, the Excel columns and the PDF register. The ledger is a बही, a gift a शगुन, a function a रस्म.
+  - **Choosing:** *Language* on More (English / हिंदी), or before sign-in from the link under the sign-in buttons.
+  - **Saving:** the app switches at once and the phone keeps the choice. It's also saved to the account (`PATCH /me`), and offline it goes up with the next account sync. A phone with no unsaved choice takes the account's language, so a change made on one phone reaches the others.
+  - **Formatting:** dates and months follow the language (14 फ़र॰ 2026). Amounts keep Indian grouping in Latin digits.
+  - **Small-caps labels in Devanagari** drop the letter spacing, which breaks the line along the top of the words, and go up a point.
+- **App lock** (More → *App lock*):
+  - **Locking:** when it's on, the app opens behind a lock screen and asks for the phone's fingerprint, face or PIN (`expo-local-authentication`). It asks again after a minute or more in the background, so a quick trip to the camera or the share sheet doesn't relock it.
+  - **Changing it:** turning it on or off asks for the same check first.
+  - **Needs a screen lock** on the phone. If that is removed later, the app opens rather than lock the family out of their own ledger.
+  - **Underneath:** the screens stay where they were, and screen readers can't reach them while locked.
+  - **Where it works:** Expo Go and builds on Android. Face ID on iOS needs a development build, and the web preview has no lock.
 
 ### Week 5: duplicate merge, invite cards, exports
 
@@ -171,14 +195,14 @@ What it does:
 apps/
   mobile/            Expo app (Expo Router, routes in src/app/)
     src/app/         Screens: sign-in, setup, (tabs)/ Home · Events · People · More, events/, people/ (incl. duplicates, merge), family/, scan-invite
-    src/components/  SignInIntro (opening animation), layout (TabHeading, cards), ledger (SyncStatus, SyncPill, entry rows)
+    src/components/  SignInIntro (opening animation), LockScreen, layout (TabHeading, cards), ledger (SyncStatus, SyncPill, entry rows)
     src/db/          Drizzle schema, write path + queries (ledger.ts), useDbQuery hook
     src/sync/        Sync engine (push/pull, no Expo imports) + two-phone integration test
-    src/lib/         API client, account, sync triggers, exports (build a file, open the share sheet)
+    src/lib/         API client, account, language, app lock, sync triggers, exports (build a file, open the share sheet)
     src/export/      Excel writer (xlsx.ts), ledger workbook, event register HTML
     src/scan/        Invite-card parser and merging of the two OCR readings
     src/theme/       Tokens from the design's UI kit: colours, spacing, type scale (incl. eyebrow)
-    src/i18n/        en.json now; hi.json in week 6
+    src/i18n/        en.json, hi.json, and a test that keeps their keys and placeholders matching
     drizzle/         Generated SQL migrations
     modules/invite-text/  Local Expo module (Android): ML Kit text recognition, Latin + Devanagari
     metro.config.js  .sql imports, wasm assets, and the web preview's cross-origin isolation headers
@@ -223,7 +247,7 @@ npm run typecheck
 - **Phone on the same Wi-Fi:** set `EXPO_PUBLIC_API_URL=http://<your computer's LAN IP>:4000`, then scan the QR code with Expo Go.
 
 **Expo Go vs development build:**
-- **Expo Go** runs everything except Google sign-in and invite-card scanning. Use *Developer sign-in* (`EXPO_PUBLIC_DEV_LOGIN=1` in the app, `DEV_LOGIN=true` on the API).
+- **Expo Go** runs everything except Google sign-in, invite-card scanning and Face ID. Use *Developer sign-in* (`EXPO_PUBLIC_DEV_LOGIN=1` in the app, `DEV_LOGIN=true` on the API).
   - The phone needs the Expo Go release for SDK 58. Expo CLI offers to install it when an older one is on the device.
 - **Google sign-in and card scanning need a development build**, because they're native modules: `npx expo run:android`, or `npx eas-cli@latest build --profile development --platform android`.
 
@@ -255,6 +279,7 @@ npm run typecheck
 - **Typing a name without picking a suggestion** reuses the person when exactly one exact match exists, and asks you to pick when there are several. This keeps duplicates down; the rest show up as duplicate suggestions.
 - **The match key lives in `packages/shared`**, so the phone's search and duplicate suggestions and the server's stored keys always agree. Merges are only ever suggested, never automatic.
 - **A merge is an edit, not a delete.** The merged person stays with `mergedInto`, and the server treats it like a delete: it sticks, and anything that arrives late for that person goes to the one kept.
+- **Language and app lock belong to the phone first.** Both live in `app_settings`, so they work offline and outlast sign-out. The language is also saved on the account so the family's other phones follow; the lock is per phone.
 - **Card reading and exports stay on the phone.** ML Kit reads the photo on the device, and the photo isn't kept. PDFs and spreadsheets are made from the local database. Nothing leaves the phone except through the share sheet.
 - **Name matching uses a custom transliterator, not a Sanskrit library.** Sanskrit schemes keep every inherent vowel (कमला → kamalā), which never matches how Hindi names are typed. The custom transliterator applies Hindi schwa deletion instead.
 - **Two typefaces, each with one job:**
@@ -264,7 +289,9 @@ npm run typecheck
 - **Colour is for attention, not decoration.** Sindoor and marigold come from the UI kit. The sync status stays quiet when everything is saved and turns marigold only while changes wait on the phone. Direction is never shown by colour alone: received is blue with ↙, given is orange with ↗.
 - **Animations only move opacity and transforms on the native driver**, so typing is never delayed, and Reduce motion skips them.
 
-## Next: Week 6 (Hindi, app lock)
+## Next
 
-1. **Hindi:** fill in `hi.json` and add a language switch on More. The account already stores a language.
-2. **App lock:** ask for the phone's PIN or fingerprint when the app opens.
+Still open from week 6:
+
+1. **Check on a phone:** the Hindi screens were checked in the web preview, and the app lock can only be tried on a phone or emulator.
+2. **Recent-apps preview:** with App lock on, Android's recent-apps screen still shows the last screen. Hiding it (`FLAG_SECURE`) would also block screenshots, so it's left as a choice.

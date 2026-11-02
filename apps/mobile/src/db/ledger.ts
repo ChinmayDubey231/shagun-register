@@ -7,6 +7,7 @@ import {
   exactKeyMatches,
   findDuplicatePairs,
   hasDevanagari,
+  LANGUAGES,
   matchKey,
   MATCH_KEY_VERSION,
   pairKey,
@@ -14,6 +15,7 @@ import {
   quickEntryInputSchema,
   type DuplicatePair,
   type FamilySummary,
+  type Language,
   type MemberRole,
   type SyncedTable,
 } from '@shagun/shared';
@@ -125,6 +127,45 @@ export function listLocalFamilies(db: LedgerDb, userId: string): LocalFamily[] {
 
 export function setCurrentFamily(db: LedgerDb, familyId: string) {
   setSetting(db, SETTING_FAMILY_ID, familyId);
+}
+
+const SETTING_LANGUAGE = 'language';
+const SETTING_LANGUAGE_PENDING = 'languagePending';
+const SETTING_APP_LOCK = 'appLock';
+
+export interface PhonePreferences {
+  /** Null until a language is chosen on this phone or an account brings one. */
+  language: Language | null;
+  /** Chosen on this phone and not yet saved to the account. */
+  languagePending: boolean;
+  appLock: boolean;
+}
+
+/** Language and app lock. They belong to the phone, so they outlast sign-out. */
+export function getPreferences(db: LedgerDb): PhonePreferences {
+  const language = getSetting(db, SETTING_LANGUAGE);
+  return {
+    language: (LANGUAGES as readonly string[]).includes(language ?? '') ? (language as Language) : null,
+    languagePending: getSetting(db, SETTING_LANGUAGE_PENDING) === '1',
+    appLock: getSetting(db, SETTING_APP_LOCK) === '1',
+  };
+}
+
+/** `pending`: chosen here, so the account should hear of it; false when the account sent it. */
+export function setLanguagePreference(db: LedgerDb, language: Language, pending: boolean) {
+  db.transaction((tx) => {
+    setSetting(tx, SETTING_LANGUAGE, language);
+    setSetting(tx, SETTING_LANGUAGE_PENDING, pending ? '1' : '0');
+  });
+}
+
+/** The account has this language now. A newer choice made meanwhile stays pending. */
+export function markLanguageSaved(db: LedgerDb, language: Language) {
+  if (getSetting(db, SETTING_LANGUAGE) === language) setSetting(db, SETTING_LANGUAGE_PENDING, '0');
+}
+
+export function setAppLockPreference(db: LedgerDb, on: boolean) {
+  setSetting(db, SETTING_APP_LOCK, on ? '1' : '0');
 }
 
 /**

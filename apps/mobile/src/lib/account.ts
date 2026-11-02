@@ -10,10 +10,15 @@ import {
 } from '@/db/ledger';
 import { newId, reloadLedgers, useSession } from '@/store/session';
 import { api, ApiError, clearAuth, restoreAuth, saveAuth, setSignedOutHandler } from './api';
+import { restoreAppLock } from './appLock';
 import { getGoogleIdToken, googleSignOut } from './googleSignIn';
+import { reconcileLanguage, restoreLanguage } from './language';
 
 /** Startup: restore the saved session (works offline), then refresh from the server in the background. */
 export async function startSession() {
+  // Before the session is set, so the first screen draws in the right language, locked if asked.
+  await restoreLanguage();
+  restoreAppLock();
   setSignedOutHandler(() => {
     useSession.getState().setUser(null);
     reloadLedgers();
@@ -67,6 +72,7 @@ export function syncAccount(): Promise<void> {
       const me = await api<MeResponse>('/me');
       useSession.getState().setUser(me.user);
       applyServerFamilies(getDb(), me.user.id, me.families, Date.now());
+      await reconcileLanguage(me.user.language);
       await registerPendingFamilies(me.user.id);
     } catch (e) {
       if (!(e instanceof ApiError) || (e.code !== 'NETWORK' && e.code !== 'NOT_CONFIGURED')) console.warn('Account sync failed:', e);

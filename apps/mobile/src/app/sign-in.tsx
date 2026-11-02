@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -23,6 +24,7 @@ import {
 import { apiErrorMessage } from "@/i18n";
 import { signInDev, signInWithGoogle } from "@/lib/account";
 import { DEV_LOGIN, googleSignInAvailable } from "@/lib/googleSignIn";
+import { chooseLanguage } from "@/lib/language";
 import { colors, fonts, space } from "@/theme";
 
 const FEATURES = [
@@ -48,7 +50,7 @@ const FEATURES = [
 
 /** Google sign-in. After this the app works offline; tokens are kept in the phone's keystore. */
 export default function SignInScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [busy, setBusy] = useState<"google" | "dev" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [devName, setDevName] = useState("");
@@ -223,6 +225,24 @@ export default function SignInScreen() {
               >
                 {t("signIn.needsInternet")} {t("signIn.contactsNote")}
               </AppText>
+              {/* Written in the other language, so it can be read by whoever needs it. */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("signIn.switchLanguage")}
+                hitSlop={8}
+                onPress={() =>
+                  void chooseLanguage(i18n.language === "hi" ? "en" : "hi")
+                }
+                style={({ pressed }) => [
+                  styles.language,
+                  pressed && { opacity: 0.6 },
+                ]}
+              >
+                <Feather name="globe" size={16} color={colors.sindoor} />
+                <AppText variant="meta" weight="bold" color={colors.sindoor}>
+                  {t("signIn.switchLanguage")}
+                </AppText>
+              </Pressable>
             </Enter>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -242,6 +262,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sindoor,
     alignItems: "center",
     justifyContent: "center",
+  },
+  language: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    alignSelf: "center",
+    minHeight: 44,
+    paddingHorizontal: space.md,
   },
   features: { gap: 14, marginTop: space.md },
   feature: { flexDirection: "row", alignItems: "center", gap: 14 },

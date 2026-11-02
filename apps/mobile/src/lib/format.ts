@@ -35,6 +35,12 @@ export function todayISO(now = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Epoch ms → "14 Feb, 8:42 pm", on the phone's calendar and clock. */
+export function formatShortDateTime(ms: number): string {
+  const day = new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short' }).format(new Date(ms));
+  return `${day}, ${formatTime(ms)}`;
+}
+
 /** Epoch ms → "14 Feb 2026, 8:42 pm", on the phone's calendar and clock. */
 export function formatDateTime(ms: number): string {
   return `${formatDate(todayISO(new Date(ms)))}, ${formatTime(ms)}`;
@@ -62,7 +68,7 @@ export function initials(name: string): string {
 /** "2026-08-03" → "Aug 2026" */
 export function formatMonthYear(iso: string): string {
   const [y, m] = iso.split('-').map(Number);
-  return new Intl.DateTimeFormat(i18n.language === 'hi' ? 'hi-IN' : 'en-IN', {
+  return new Intl.DateTimeFormat(locale(), {
     month: 'short',
     year: 'numeric',
     timeZone: 'UTC',

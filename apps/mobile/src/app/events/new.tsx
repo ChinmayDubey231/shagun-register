@@ -348,6 +348,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     borderRadius: radius.pill,
     backgroundColor: colors.sindoorTint,
+    // The header's own padding suits icon buttons; a filled pill needs this to meet the form's 20 px edge.
+    marginRight: space.sm,
   },
   addChip: {
     minHeight: 40,

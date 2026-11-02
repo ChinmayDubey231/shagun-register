@@ -204,11 +204,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: radius.card,
-    borderWidth: 1.5,
+    // One width either way, so choosing a card doesn't nudge what's inside it.
+    borderWidth: 2,
     borderColor: colors.line,
     paddingRight: space.md,
   },
-  choiceOn: { borderColor: colors.sindoor, borderWidth: 2 },
+  choiceOn: { borderColor: colors.sindoor },
   radio: {
     width: 24,
     height: 24,

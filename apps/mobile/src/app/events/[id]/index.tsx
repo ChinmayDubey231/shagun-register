@@ -223,8 +223,9 @@ const styles = StyleSheet.create({
   modeBox: { flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: radius.input, paddingVertical: space.sm, paddingHorizontal: 10 },
   toolbar: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.line, paddingTop: space.md, paddingHorizontal: space.xl, gap: space.sm },
   tabs: { gap: 4 },
-  tab: { height: 44, paddingHorizontal: 14, justifyContent: 'center' },
-  tabOn: { borderBottomWidth: 3, borderBottomColor: colors.sindoor },
+  // Every tab carries the underline's width, so the selected label doesn't sit higher than the rest.
+  tab: { height: 44, paddingHorizontal: 14, justifyContent: 'center', borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  tabOn: { borderBottomColor: colors.sindoor },
   list: { padding: space.xl, paddingBottom: 120, flexGrow: 1 },
   syncLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: space.sm },
   dot: { width: 8, height: 8, borderRadius: 4 },

@@ -50,6 +50,12 @@
           "photosPermission": "Shagun Register reads invite cards you choose from your photos. Photos stay on your phone.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Shagun Register uses Face ID to unlock when App lock is on."
+        }
       ]
     ]
   }

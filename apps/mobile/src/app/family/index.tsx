@@ -13,7 +13,7 @@ import { Avatar } from '@/components/ledger';
 import { apiErrorMessage } from '@/i18n';
 import { api, ApiError } from '@/lib/api';
 import { syncAccount } from '@/lib/account';
-import { formatTime } from '@/lib/format';
+import { formatShortDateTime } from '@/lib/format';
 import { useSession } from '@/store/session';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -185,7 +185,7 @@ export default function FamilyMembersScreen() {
                   </AppText>
                   <AppText variant="caption" color={colors.inkMuted}>
                     {t('family.expires', {
-                      when: `${new Date(inv.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${formatTime(inv.expiresAt)}`,
+                      when: formatShortDateTime(inv.expiresAt),
                     })}
                   </AppText>
                 </View>

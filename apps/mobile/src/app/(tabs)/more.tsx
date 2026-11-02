@@ -3,15 +3,18 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, AppState, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
+import { Segmented } from '@/components/Choice';
 import { Card, Divider, ListGroup, TabHeading } from '@/components/layout';
 import { Avatar, SyncPill } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { countPendingChanges } from '@/db/ledger';
+import { canUseAppLock, setAppLockEnabled, useAppLock } from '@/lib/appLock';
 import { exportErrorMessage, shareLedgerWorkbook } from '@/lib/exports';
+import { chooseLanguage, LANGUAGE_NAMES } from '@/lib/language';
 import { syncNow, useSyncStatus } from '@/lib/sync';
 import { useSyncRefresh } from '@/lib/useSyncRefresh';
 import { countRejected } from '@/sync/engine';
@@ -53,9 +56,9 @@ function ago(at: number, t: ReturnType<typeof useTranslation>['t']) {
   return minutes < 1 ? t('sync.justNow') : t('sync.minutesAgo', { count: minutes });
 }
 
-/** Ledger, members, export, account. Hindi and app lock arrive in later weeks. */
+/** Ledger, members, export, language, app lock, account. */
 export default function MoreScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const family = useSession((s) => s.family);
   const families = useSession((s) => s.families);
@@ -65,7 +68,27 @@ export default function MoreScreen() {
   const sync = useSyncStatus();
   const refreshControl = useSyncRefresh();
   const [exporting, setExporting] = useState(false);
+  const lockOn = useAppLock((s) => s.enabled);
+  const [lockAvailable, setLockAvailable] = useState(false);
   const roleLabel = { owner: t('family.roleOwner'), editor: t('family.roleEditor'), viewer: t('family.roleViewer') };
+
+  // Rechecked on return, in case a screen lock was just set up in the phone's Settings.
+  useEffect(() => {
+    const check = () => void canUseAppLock().then(setLockAvailable);
+    check();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') check();
+    });
+    return () => sub.remove();
+  }, []);
+
+  const toggleLock = async (on: boolean) => {
+    const outcome = await setAppLockEnabled(on);
+    if (outcome === 'lockout') Alert.alert(t('lock.lockout'));
+    else if (outcome === 'failed') Alert.alert(t('lock.failed'));
+  };
+  const lockHint =
+    Platform.OS === 'web' ? t('more.appLockWeb') : lockAvailable || lockOn ? t('more.appLockHint') : t('more.appLockUnavailable');
 
   const exportExcel = async () => {
     if (!family || exporting) return;
@@ -174,6 +197,49 @@ export default function MoreScreen() {
 
         <Card style={{ gap: space.md }}>
           <AppText variant="label" color={colors.inkMuted}>
+            {t('more.language')}
+          </AppText>
+          <Segmented
+            label={t('more.language')}
+            options={[
+              { value: 'en', label: LANGUAGE_NAMES.en },
+              { value: 'hi', label: LANGUAGE_NAMES.hi },
+            ]}
+            value={i18n.language === 'hi' ? 'hi' : 'en'}
+            onChange={(language) => void chooseLanguage(language)}
+          />
+          <AppText variant="caption" color={colors.inkMuted}>
+            {t('more.languageHint')}
+          </AppText>
+        </Card>
+
+        <View style={{ gap: space.sm }}>
+          <ListGroup>
+            <View style={styles.row}>
+              <Feather name="lock" size={22} color={colors.inkMuted} />
+              <AppText variant="bodyStrong" style={{ flex: 1 }}>
+                {t('more.appLock')}
+              </AppText>
+              <Switch
+                accessibilityLabel={t('more.appLock')}
+                accessibilityHint={lockHint}
+                value={lockOn}
+                // Turning it off stays possible after the phone's own screen lock is removed.
+                disabled={!lockOn && !lockAvailable}
+                onValueChange={(on) => void toggleLock(on)}
+                trackColor={{ false: colors.lineStrong, true: colors.sindoor }}
+                thumbColor={colors.surface}
+                ios_backgroundColor={colors.lineStrong}
+              />
+            </View>
+          </ListGroup>
+          <AppText variant="caption" color={colors.inkMuted} style={{ paddingHorizontal: space.sm }}>
+            {lockHint}
+          </AppText>
+        </View>
+
+        <Card style={{ gap: space.md }}>
+          <AppText variant="label" color={colors.inkMuted}>
             {t('more.account')}
           </AppText>
           <View style={styles.ledgerRow}>
@@ -191,13 +257,6 @@ export default function MoreScreen() {
         <ListGroup>
           <Row icon="log-out" label={t('more.signOut')} onPress={confirmSignOut} danger />
         </ListGroup>
-
-        <Card style={{ gap: space.sm }}>
-          <AppText variant="label" color={colors.inkMuted}>
-            {t('more.comingNext')}
-          </AppText>
-          <AppText variant="meta">{t('more.comingNextBody')}</AppText>
-        </Card>
 
         <AppText variant="caption" color={colors.inkSubtle} align="center">
           {t('more.version', { version: Constants.expoConfig?.version ?? '0.1.0' })}

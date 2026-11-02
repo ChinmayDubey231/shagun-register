@@ -19,8 +19,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import migrations from '../../drizzle/migrations';
 import { AppText } from '@/components/AppText';
 import { getDb, prepareDatabase } from '@/db/client';
+import { LockScreen } from '@/components/LockScreen';
 import { SyncDriver } from '@/components/SyncDriver';
 import { startSession } from '@/lib/account';
+import { useAppLock, watchAppLock } from '@/lib/appLock';
 import { useSession } from '@/store/session';
 import { colors, space } from '@/theme';
 
@@ -53,10 +55,12 @@ function App() {
   const authStatus = useSession((s) => s.authStatus);
   const deviceId = useSession((s) => s.deviceId);
   const family = useSession((s) => s.family);
+  const locked = useAppLock((s) => s.locked);
 
   useEffect(() => {
     if (migration.success) void startSession();
   }, [migration.success]);
+  useEffect(() => watchAppLock(), []);
 
   const signedIn = authStatus === 'signedIn';
   const ready = (fontsLoaded || !!fontError) && deviceId !== null && authStatus !== 'loading';
@@ -71,29 +75,33 @@ function App() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <SyncDriver />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}>
-        <Stack.Protected guard={signedIn && family !== null}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="events/new" />
-          <Stack.Screen name="events/[id]/index" />
-          <Stack.Screen name="events/[id]/entry" options={{ animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="events/[id]/cash" />
-          <Stack.Screen name="people/[id]/index" />
-          <Stack.Screen name="people/[id]/edit" options={{ animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="people/duplicates" />
-          <Stack.Screen name="people/merge" options={{ animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="scan-invite" options={{ animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="family/index" />
-          <Stack.Screen name="family/switch" options={{ animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="family/add" />
-        </Stack.Protected>
-        <Stack.Protected guard={signedIn && family === null}>
-          <Stack.Screen name="setup" />
-        </Stack.Protected>
-        <Stack.Protected guard={!signedIn}>
-          <Stack.Screen name="sign-in" />
-        </Stack.Protected>
-      </Stack>
+      {/* While locked, screen readers can't reach the ledger under the lock screen either. */}
+      <View style={{ flex: 1 }} importantForAccessibility={locked ? 'no-hide-descendants' : 'auto'} accessibilityElementsHidden={locked}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}>
+          <Stack.Protected guard={signedIn && family !== null}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="events/new" />
+            <Stack.Screen name="events/[id]/index" />
+            <Stack.Screen name="events/[id]/entry" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="events/[id]/cash" />
+            <Stack.Screen name="people/[id]/index" />
+            <Stack.Screen name="people/[id]/edit" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="people/duplicates" />
+            <Stack.Screen name="people/merge" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="scan-invite" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="family/index" />
+            <Stack.Screen name="family/switch" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="family/add" />
+          </Stack.Protected>
+          <Stack.Protected guard={signedIn && family === null}>
+            <Stack.Screen name="setup" />
+          </Stack.Protected>
+          <Stack.Protected guard={!signedIn}>
+            <Stack.Screen name="sign-in" />
+          </Stack.Protected>
+        </Stack>
+      </View>
+      {locked ? <LockScreen /> : null}
     </SafeAreaProvider>
   );
 }
