@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { KeyboardAvoidingView, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CreateOrJoin } from '@/components/CreateOrJoin';
 import { ScreenHeader } from '@/components/layout';
@@ -13,7 +13,7 @@ export default function AddLedgerScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.ground }} edges={['top', 'bottom']}>
       <ScreenHeader title={t('setup.addTitle')} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: space.xl }} keyboardShouldPersistTaps="handled">
           <CreateOrJoin onDone={() => router.dismissTo('/')} />
         </ScrollView>

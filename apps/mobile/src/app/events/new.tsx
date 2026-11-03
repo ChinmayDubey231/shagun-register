@@ -114,7 +114,7 @@ export default function CreateEventScreen() {
           </Pressable>
         }
       />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {card ? (
             <View style={styles.fromCard} accessibilityLiveRegion="polite">

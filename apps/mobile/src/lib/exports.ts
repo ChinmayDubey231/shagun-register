@@ -29,6 +29,7 @@ export class ShareUnavailableError extends Error {}
 
 /** What to tell the family when an export fails. */
 export function exportErrorMessage(e: unknown, t: TFunction): string {
+  console.warn('Export failed:', e);
   return e instanceof ShareUnavailableError ? t('export.noShare') : t('export.failed');
 }
 
@@ -62,9 +63,16 @@ export async function shareEventRegister(familyId: string, ledgerName: string, e
     t,
   );
   if (Platform.OS === 'web') return printOnWeb(html);
-  const { uri } = await Print.printToFileAsync({ html, width: 595, height: 842 });
+  // Written out rather than moved: Expo Go prints outside the project's sandbox, where the file API can't reach.
+  const { uri, base64 } = await Print.printToFileAsync({ html, width: 595, height: 842, base64: true });
   const file = new File(Paths.cache, `${safeFileName(t('export.registerFile', { title: event.title }))}.pdf`);
-  await new File(uri).move(file, { overwrite: true });
+  file.create({ overwrite: true });
+  await file.write(base64!, { encoding: 'base64' });
+  try {
+    new File(uri).delete();
+  } catch {
+    // only tidying up: Expo Go can't reach it, and the register is already written
+  }
   await share(file.uri, 'application/pdf', 'com.adobe.pdf', t('export.pdf'));
 }
 

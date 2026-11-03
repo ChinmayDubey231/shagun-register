@@ -14,7 +14,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View, type TextInputInstance } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View, type TextInputInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -234,316 +234,318 @@ export default function QuickEntryScreen() {
         }
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <Segmented<Direction>
-          label={t('quickEntry.direction')}
-          value={direction}
-          onChange={setDirection}
-          options={[
-            { value: 'received', label: t('direction.received'), accent: colors.received, icon: 'arrow-down-left' },
-            { value: 'given', label: t('direction.given'), accent: colors.given, icon: 'arrow-up-right' },
-          ]}
-        />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          <Segmented<Direction>
+            label={t('quickEntry.direction')}
+            value={direction}
+            onChange={setDirection}
+            options={[
+              { value: 'received', label: t('direction.received'), accent: colors.received, icon: 'arrow-down-left' },
+              { value: 'given', label: t('direction.given'), accent: colors.given, icon: 'arrow-up-right' },
+            ]}
+          />
 
-        {event.subFunctions.length > 0 ? (
-          <ChipRow>
-            {event.subFunctions.map((f) => (
-              <Chip
-                key={f}
-                tone="marigold"
-                label={t(`subFunction.${f}` as 'subFunction.haldi', { defaultValue: f })}
-                selected={subFunction === f}
-                onPress={() => {
-                  setSubFunction(f);
-                  rememberFn(eventId, f);
-                }}
-              />
-            ))}
-          </ChipRow>
-        ) : null}
+          {event.subFunctions.length > 0 ? (
+            <ChipRow>
+              {event.subFunctions.map((f) => (
+                <Chip
+                  key={f}
+                  tone="marigold"
+                  label={t(`subFunction.${f}` as 'subFunction.haldi', { defaultValue: f })}
+                  selected={subFunction === f}
+                  onPress={() => {
+                    setSubFunction(f);
+                    rememberFn(eventId, f);
+                  }}
+                />
+              ))}
+            </ChipRow>
+          ) : null}
 
-        {/* Who */}
-        <View style={{ gap: 6 }}>
-          <AppText variant="label" color={colors.inkMuted}>
-            {direction === 'received' ? t('quickEntry.from') : t('quickEntry.to')}
-          </AppText>
-          {who ? (
-            <>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${who.kind === 'existing' ? who.person.displayName : who.name}. ${t('quickEntry.clearPerson')}`}
-                onPress={clearPerson}
-                style={styles.picked}
-              >
-                <Avatar name={who.kind === 'existing' ? who.person.displayName : who.name} size={34} />
-                <AppText variant="rowTitle" style={{ flex: 1 }} numberOfLines={1}>
-                  {who.kind === 'existing' ? who.person.displayName : who.name}
-                </AppText>
-                {who.kind === 'existing' && who.person.city ? (
-                  <View style={styles.cityTag}>
-                    <AppText variant="tiny" color={colors.inkMuted} style={{ fontSize: 13 }}>
-                      {who.person.city}
-                    </AppText>
-                  </View>
-                ) : null}
-                {who.kind === 'new' ? (
-                  <View style={[styles.cityTag, { backgroundColor: colors.marigoldTint }]}>
-                    <AppText variant="tiny" color={colors.marigoldInk} style={{ fontSize: 13 }}>
-                      {t('quickEntry.newPerson')}
-                    </AppText>
-                  </View>
-                ) : null}
-                <Feather name="x" size={20} color={colors.inkMuted} />
-              </Pressable>
-              {who.kind === 'existing' ? (
-                <AppText variant="meta" color={colors.inkMuted}>
-                  {last
-                    ? t('quickEntry.last', {
-                        who: last.direction === 'given' ? t('direction.youGave') : t('direction.theyGave'),
-                        amount: last.mode === 'item' && !last.amount ? t('mode.item') : formatINR(last.amount),
-                        event: last.eventTitle,
-                      })
-                    : t('quickEntry.noHistory')}
-                </AppText>
-              ) : (
-                <View style={styles.newPersonExtra}>
-                  {who.phone ? (
-                    <AppText variant="caption" color={colors.inkMuted}>
-                      {t('quickEntry.fromContact', { phone: who.phone })}
-                    </AppText>
-                  ) : null}
-                  <TextInput
-                    accessibilityLabel={t('quickEntry.cityLabel')}
-                    placeholder={t('quickEntry.cityPlaceholder')}
-                    placeholderTextColor={colors.placeholder}
-                    value={newCity}
-                    onChangeText={setNewCity}
-                    autoCapitalize="words"
-                    style={styles.cityInput}
-                  />
-                </View>
-              )}
-            </>
-          ) : (
-            <>
-              <TextInput
-                ref={nameRef}
-                accessibilityLabel={t('quickEntry.nameLabel')}
-                placeholder={t('quickEntry.namePlaceholder')}
-                placeholderTextColor={colors.placeholder}
-                value={nameText}
-                onChangeText={(v) => {
-                  setNameText(v);
-                  if (error) setError(null);
-                }}
-                autoCapitalize="words"
-                autoCorrect={false}
-                returnKeyType="done"
-                style={[styles.nameInput, nameError ? { borderColor: colors.danger, borderWidth: 2 } : null]}
-              />
-              {nameError ? (
-                <AppText variant="caption" color={colors.danger} accessibilityLiveRegion="polite">
-                  {nameError}
-                </AppText>
-              ) : null}
-              {nameText.trim() ? (
-                <View style={styles.suggestions} accessibilityRole="list">
-                  {suggestions.map((p) => (
-                    <Pressable
-                      key={p.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={[p.displayName, p.city, p.relation ? t(`relation.${p.relation}` as 'relation.friend', { defaultValue: p.relation }) : null].filter(Boolean).join(', ')}
-                      onPress={() => pickPerson(p)}
-                      style={({ pressed }) => [styles.suggestion, pressed && { backgroundColor: colors.ground }]}
-                    >
-                      <Avatar name={p.displayName} size={36} />
-                      <View style={{ flex: 1 }}>
-                        <AppText variant="bodyStrong" weight="bold">
-                          {p.displayName}
-                        </AppText>
-                        <AppText variant="caption" color={colors.inkMuted}>
-                          {withArrows(
-                            [
-                              p.city,
-                              p.relation ? t(`relation.${p.relation}` as 'relation.friend', { defaultValue: p.relation }) : null,
-                              p.lastAmount !== null && p.lastDirection
-                                ? `${p.lastDirection === 'given' ? '↗' : '↙'} ${formatINR(p.lastAmount)}`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ') || ' ',
-                            13,
-                          )}
-                        </AppText>
-                      </View>
-                    </Pressable>
-                  ))}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('quickEntry.addNew', { name: nameText.trim() })}
-                    onPress={() => {
-                      setWho({ kind: 'new', name: nameText.trim().replace(/\s+/g, ' ') });
-                      Keyboard.dismiss();
-                    }}
-                    style={({ pressed }) => [styles.suggestion, styles.addNew, pressed && { backgroundColor: colors.ground }]}
-                  >
-                    <Feather name="user-plus" size={20} color={colors.sindoor} />
-                    <AppText variant="bodyStrong" weight="bold" color={colors.sindoor} style={{ flex: 1 }}>
-                      {t('quickEntry.addNew', { name: nameText.trim() })}
-                    </AppText>
-                  </Pressable>
-                  {contactHits.length > 0 ? (
-                    <View style={styles.contactsBlock}>
-                      <AppText variant="tiny" color={colors.inkMuted} style={styles.blockLabel}>
-                        {t('quickEntry.fromContacts')}
+          {/* Who */}
+          <View style={{ gap: 6 }}>
+            <AppText variant="label" color={colors.inkMuted}>
+              {direction === 'received' ? t('quickEntry.from') : t('quickEntry.to')}
+            </AppText>
+            {who ? (
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${who.kind === 'existing' ? who.person.displayName : who.name}. ${t('quickEntry.clearPerson')}`}
+                  onPress={clearPerson}
+                  style={styles.picked}
+                >
+                  <Avatar name={who.kind === 'existing' ? who.person.displayName : who.name} size={34} />
+                  <AppText variant="rowTitle" style={{ flex: 1 }} numberOfLines={1}>
+                    {who.kind === 'existing' ? who.person.displayName : who.name}
+                  </AppText>
+                  {who.kind === 'existing' && who.person.city ? (
+                    <View style={styles.cityTag}>
+                      <AppText variant="tiny" color={colors.inkMuted} style={{ fontSize: 13 }}>
+                        {who.person.city}
                       </AppText>
-                      {contactHits.map((c) => (
-                        <Pressable
-                          key={c.id}
-                          accessibilityRole="button"
-                          accessibilityLabel={[c.displayName, c.phone].filter(Boolean).join(', ')}
-                          onPress={() => {
-                            setWho({ kind: 'new', name: c.displayName, phone: c.phone });
-                            Keyboard.dismiss();
-                          }}
-                          style={({ pressed }) => [styles.suggestion, pressed && { backgroundColor: colors.ground }]}
-                        >
-                          <Feather name="smartphone" size={20} color={colors.inkMuted} />
-                          <View style={{ flex: 1 }}>
-                            <AppText variant="bodyStrong" weight="bold">
-                              {c.displayName}
-                            </AppText>
-                            {c.phone ? (
-                              <AppText variant="caption" color={colors.inkMuted}>
-                                {c.phone}
-                              </AppText>
-                            ) : null}
-                          </View>
-                        </Pressable>
-                      ))}
                     </View>
                   ) : null}
-                  {contacts === null ? (
+                  {who.kind === 'new' ? (
+                    <View style={[styles.cityTag, { backgroundColor: colors.marigoldTint }]}>
+                      <AppText variant="tiny" color={colors.marigoldInk} style={{ fontSize: 13 }}>
+                        {t('quickEntry.newPerson')}
+                      </AppText>
+                    </View>
+                  ) : null}
+                  <Feather name="x" size={20} color={colors.inkMuted} />
+                </Pressable>
+                {who.kind === 'existing' ? (
+                  <AppText variant="meta" color={colors.inkMuted}>
+                    {last
+                      ? t('quickEntry.last', {
+                          who: last.direction === 'given' ? t('direction.youGave') : t('direction.theyGave'),
+                          amount: last.mode === 'item' && !last.amount ? t('mode.item') : formatINR(last.amount),
+                          event: last.eventTitle,
+                        })
+                      : t('quickEntry.noHistory')}
+                  </AppText>
+                ) : (
+                  <View style={styles.newPersonExtra}>
+                    {who.phone ? (
+                      <AppText variant="caption" color={colors.inkMuted}>
+                        {t('quickEntry.fromContact', { phone: who.phone })}
+                      </AppText>
+                    ) : null}
+                    <TextInput
+                      accessibilityLabel={t('quickEntry.cityLabel')}
+                      placeholder={t('quickEntry.cityPlaceholder')}
+                      placeholderTextColor={colors.placeholder}
+                      value={newCity}
+                      onChangeText={setNewCity}
+                      autoCapitalize="words"
+                      style={styles.cityInput}
+                    />
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                <TextInput
+                  ref={nameRef}
+                  accessibilityLabel={t('quickEntry.nameLabel')}
+                  placeholder={t('quickEntry.namePlaceholder')}
+                  placeholderTextColor={colors.placeholder}
+                  value={nameText}
+                  onChangeText={(v) => {
+                    setNameText(v);
+                    if (error) setError(null);
+                  }}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  style={[styles.nameInput, nameError ? { borderColor: colors.danger, borderWidth: 2 } : null]}
+                />
+                {nameError ? (
+                  <AppText variant="caption" color={colors.danger} accessibilityLiveRegion="polite">
+                    {nameError}
+                  </AppText>
+                ) : null}
+                {nameText.trim() ? (
+                  <View style={styles.suggestions} accessibilityRole="list">
+                    {suggestions.map((p) => (
+                      <Pressable
+                        key={p.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={[p.displayName, p.city, p.relation ? t(`relation.${p.relation}` as 'relation.friend', { defaultValue: p.relation }) : null].filter(Boolean).join(', ')}
+                        onPress={() => pickPerson(p)}
+                        style={({ pressed }) => [styles.suggestion, pressed && { backgroundColor: colors.ground }]}
+                      >
+                        <Avatar name={p.displayName} size={36} />
+                        <View style={{ flex: 1 }}>
+                          <AppText variant="bodyStrong" weight="bold">
+                            {p.displayName}
+                          </AppText>
+                          <AppText variant="caption" color={colors.inkMuted}>
+                            {withArrows(
+                              [
+                                p.city,
+                                p.relation ? t(`relation.${p.relation}` as 'relation.friend', { defaultValue: p.relation }) : null,
+                                p.lastAmount !== null && p.lastDirection
+                                  ? `${p.lastDirection === 'given' ? '↗' : '↙'} ${formatINR(p.lastAmount)}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ') || ' ',
+                              13,
+                            )}
+                          </AppText>
+                        </View>
+                      </Pressable>
+                    ))}
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={t('quickEntry.searchContacts')}
-                      onPress={askContacts}
+                      accessibilityLabel={t('quickEntry.addNew', { name: nameText.trim() })}
+                      onPress={() => {
+                        setWho({ kind: 'new', name: nameText.trim().replace(/\s+/g, ' ') });
+                        Keyboard.dismiss();
+                      }}
                       style={({ pressed }) => [styles.suggestion, styles.addNew, pressed && { backgroundColor: colors.ground }]}
                     >
-                      <Feather name="book" size={20} color={colors.inkMuted} />
-                      <AppText variant="label" color={colors.inkMuted} style={{ flex: 1 }}>
-                        {t('quickEntry.searchContacts')}
+                      <Feather name="user-plus" size={20} color={colors.sindoor} />
+                      <AppText variant="bodyStrong" weight="bold" color={colors.sindoor} style={{ flex: 1 }}>
+                        {t('quickEntry.addNew', { name: nameText.trim() })}
                       </AppText>
                     </Pressable>
-                  ) : null}
-                </View>
-              ) : null}
-            </>
-          )}
-        </View>
-
-        <View style={{ gap: 6 }}>
-          <AppText variant="label" color={colors.inkMuted}>
-            {t('quickEntry.relation')}
-          </AppText>
-          <ChipRow>
-            {RELATION_PRESETS.map((r) => (
-              <Chip key={r} label={t(`relation.${r}`)} selected={relation === r} onPress={() => setRelation(relation === r ? null : r)} />
-            ))}
-          </ChipRow>
-        </View>
-
-        {/* Amount */}
-        <View style={{ gap: 6 }}>
-          <AppText variant="label" color={colors.inkMuted}>
-            {mode === 'item' ? `${t('quickEntry.itemValue')} ${t('common.optional')}` : t('quickEntry.amount')}
-          </AppText>
-          <View
-            accessible
-            accessibilityRole="text"
-            accessibilityLabel={t('quickEntry.amountA11y', { amount })}
-            accessibilityLiveRegion="polite"
-            style={[styles.amountBox, { backgroundColor: accent.bg }, error?.field === 'amount' && { borderColor: colors.danger, borderWidth: 2 }]}
-          >
-            <AppText style={[styles.amountText, { color: digits ? accent.fg : colors.placeholder }]} tabular>
-              ₹{groupINR(amount)}
-            </AppText>
+                    {contactHits.length > 0 ? (
+                      <View style={styles.contactsBlock}>
+                        <AppText variant="tiny" color={colors.inkMuted} style={styles.blockLabel}>
+                          {t('quickEntry.fromContacts')}
+                        </AppText>
+                        {contactHits.map((c) => (
+                          <Pressable
+                            key={c.id}
+                            accessibilityRole="button"
+                            accessibilityLabel={[c.displayName, c.phone].filter(Boolean).join(', ')}
+                            onPress={() => {
+                              setWho({ kind: 'new', name: c.displayName, phone: c.phone });
+                              Keyboard.dismiss();
+                            }}
+                            style={({ pressed }) => [styles.suggestion, pressed && { backgroundColor: colors.ground }]}
+                          >
+                            <Feather name="smartphone" size={20} color={colors.inkMuted} />
+                            <View style={{ flex: 1 }}>
+                              <AppText variant="bodyStrong" weight="bold">
+                                {c.displayName}
+                              </AppText>
+                              {c.phone ? (
+                                <AppText variant="caption" color={colors.inkMuted}>
+                                  {c.phone}
+                                </AppText>
+                              ) : null}
+                            </View>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                    {contacts === null ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={t('quickEntry.searchContacts')}
+                        onPress={askContacts}
+                        style={({ pressed }) => [styles.suggestion, styles.addNew, pressed && { backgroundColor: colors.ground }]}
+                      >
+                        <Feather name="book" size={20} color={colors.inkMuted} />
+                        <AppText variant="label" color={colors.inkMuted} style={{ flex: 1 }}>
+                          {t('quickEntry.searchContacts')}
+                        </AppText>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+              </>
+            )}
           </View>
-          {error?.field === 'amount' ? (
-            <AppText variant="caption" color={colors.danger}>
+
+          <View style={{ gap: 6 }}>
+            <AppText variant="label" color={colors.inkMuted}>
+              {t('quickEntry.relation')}
+            </AppText>
+            <ChipRow>
+              {RELATION_PRESETS.map((r) => (
+                <Chip key={r} label={t(`relation.${r}`)} selected={relation === r} onPress={() => setRelation(relation === r ? null : r)} />
+              ))}
+            </ChipRow>
+          </View>
+
+          {/* Amount */}
+          <View style={{ gap: 6 }}>
+            <AppText variant="label" color={colors.inkMuted}>
+              {mode === 'item' ? `${t('quickEntry.itemValue')} ${t('common.optional')}` : t('quickEntry.amount')}
+            </AppText>
+            <View
+              accessible
+              accessibilityRole="text"
+              accessibilityLabel={t('quickEntry.amountA11y', { amount })}
+              accessibilityLiveRegion="polite"
+              style={[styles.amountBox, { backgroundColor: accent.bg }, error?.field === 'amount' && { borderColor: colors.danger, borderWidth: 2 }]}
+            >
+              <AppText style={[styles.amountText, { color: digits ? accent.fg : colors.placeholder }]} tabular>
+                ₹{groupINR(amount)}
+              </AppText>
+            </View>
+            {error?.field === 'amount' ? (
+              <AppText variant="caption" color={colors.danger}>
+                {error.message}
+              </AppText>
+            ) : null}
+          </View>
+
+          <View accessibilityLabel={t('quickEntry.amountChips')} style={styles.chipsRow}>
+            {AMOUNT_CHIPS.map((v) => {
+              const on = amount === v;
+              return (
+                <Pressable
+                  key={v}
+                  accessibilityRole="button"
+                  accessibilityLabel={groupINR(v)}
+                  accessibilityState={{ selected: on }}
+                  onPress={() => {
+                    setDigits(String(v));
+                    if (error?.field === 'amount') setError(null);
+                  }}
+                  style={[styles.amountChip, on && styles.amountChipOn]}
+                >
+                  <AppText variant="bodyStrong" weight={on ? 'extrabold' : 'bold'} color={on ? colors.onMarigold : colors.ink} style={{ fontSize: 15 }}>
+                    {groupINR(v)}
+                  </AppText>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Segmented<PaymentMode>
+            label={t('quickEntry.mode')}
+            value={mode}
+            onChange={(m) => {
+              setMode(m);
+              setError(null);
+            }}
+            options={[
+              { value: 'cash', label: t('mode.cash') },
+              { value: 'upi', label: t('mode.upi') },
+              { value: 'cheque', label: t('mode.cheque') },
+              { value: 'item', label: t('mode.item') },
+            ]}
+          />
+
+          {mode === 'item' ? (
+            <Field
+              label={t('quickEntry.itemLabel')}
+              placeholder={t('quickEntry.itemPlaceholder')}
+              value={itemNote}
+              onChangeText={(v) => {
+                setItemNote(v);
+                setError(null);
+              }}
+              error={error?.field === 'itemNote' ? error.message : null}
+            />
+          ) : null}
+
+          {showNote ? (
+            <Field label={t('quickEntry.note')} placeholder={t('quickEntry.notePlaceholder')} value={note} onChangeText={setNote} autoFocus multiline />
+          ) : (
+            <Pressable accessibilityRole="button" accessibilityLabel={t('quickEntry.addNote')} onPress={() => setShowNote(true)} style={styles.noteButton}>
+              <Feather name="file-text" size={18} color={colors.ink} />
+              <AppText variant="label" weight="bold">
+                {t('quickEntry.addNote')}
+              </AppText>
+            </Pressable>
+          )}
+
+          {error?.field === 'form' || error?.field === 'eventId' ? (
+            <AppText variant="caption" color={colors.danger} align="center">
               {error.message}
             </AppText>
           ) : null}
-        </View>
-
-        <View accessibilityLabel={t('quickEntry.amountChips')} style={styles.chipsRow}>
-          {AMOUNT_CHIPS.map((v) => {
-            const on = amount === v;
-            return (
-              <Pressable
-                key={v}
-                accessibilityRole="button"
-                accessibilityLabel={groupINR(v)}
-                accessibilityState={{ selected: on }}
-                onPress={() => {
-                  setDigits(String(v));
-                  if (error?.field === 'amount') setError(null);
-                }}
-                style={[styles.amountChip, on && styles.amountChipOn]}
-              >
-                <AppText variant="bodyStrong" weight={on ? 'extrabold' : 'bold'} color={on ? colors.onMarigold : colors.ink} style={{ fontSize: 15 }}>
-                  {groupINR(v)}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Segmented<PaymentMode>
-          label={t('quickEntry.mode')}
-          value={mode}
-          onChange={(m) => {
-            setMode(m);
-            setError(null);
-          }}
-          options={[
-            { value: 'cash', label: t('mode.cash') },
-            { value: 'upi', label: t('mode.upi') },
-            { value: 'cheque', label: t('mode.cheque') },
-            { value: 'item', label: t('mode.item') },
-          ]}
-        />
-
-        {mode === 'item' ? (
-          <Field
-            label={t('quickEntry.itemLabel')}
-            placeholder={t('quickEntry.itemPlaceholder')}
-            value={itemNote}
-            onChangeText={(v) => {
-              setItemNote(v);
-              setError(null);
-            }}
-            error={error?.field === 'itemNote' ? error.message : null}
-          />
-        ) : null}
-
-        {showNote ? (
-          <Field label={t('quickEntry.note')} placeholder={t('quickEntry.notePlaceholder')} value={note} onChangeText={setNote} autoFocus multiline />
-        ) : (
-          <Pressable accessibilityRole="button" accessibilityLabel={t('quickEntry.addNote')} onPress={() => setShowNote(true)} style={styles.noteButton}>
-            <Feather name="file-text" size={18} color={colors.ink} />
-            <AppText variant="label" weight="bold">
-              {t('quickEntry.addNote')}
-            </AppText>
-          </Pressable>
-        )}
-
-        {error?.field === 'form' || error?.field === 'eventId' ? (
-          <AppText variant="caption" color={colors.danger} align="center">
-            {error.message}
-          </AppText>
-        ) : null}
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {toast ? (
         <View style={[styles.toast, { top: insets.top + 64 }]} accessibilityLiveRegion="polite" pointerEvents="none">

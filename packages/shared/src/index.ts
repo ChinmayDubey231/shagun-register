@@ -8,3 +8,4 @@ export * from './personSearch';
 export * from './duplicates';
 export * from './api';
 export * from './sync';
+export * from './demo';
