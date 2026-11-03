@@ -1,9 +1,10 @@
 import { Feather } from "@expo/vector-icons";
+import { DEMO_ACCOUNTS } from "@shagun/shared";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppText } from "@/components/AppText";
 import { Button } from "@/components/Button";
 import { Field } from "@/components/Field";
-import { Card } from "@/components/layout";
+import { Card, Divider, ListGroup } from "@/components/layout";
+import { Avatar } from "@/components/ledger";
 import {
   Enter,
   InkReveal,
@@ -51,12 +53,18 @@ const FEATURES = [
 /** Google sign-in. After this the app works offline; tokens are kept in the phone's keystore. */
 export default function SignInScreen() {
   const { t, i18n } = useTranslation();
-  const [busy, setBusy] = useState<"google" | "dev" | null>(null);
+  // "google", "dev" or the email of the demo account being signed in.
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [devName, setDevName] = useState("");
   const [devEmail, setDevEmail] = useState("");
+  const roleLabel = {
+    owner: t("family.roleOwner"),
+    editor: t("family.roleEditor"),
+    viewer: t("family.roleViewer"),
+  };
 
-  const run = async (which: "google" | "dev", fn: () => Promise<unknown>) => {
+  const run = async (which: string, fn: () => Promise<unknown>) => {
     setBusy(which);
     setError(null);
     try {
@@ -73,7 +81,7 @@ export default function SignInScreen() {
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="padding"
         >
           <ScrollView
             contentContainerStyle={styles.content}
@@ -189,6 +197,67 @@ export default function SignInScreen() {
                       {t("signIn.devHint")}
                     </AppText>
                   </View>
+                  <View style={{ gap: space.sm }}>
+                    <AppText variant="label" color={colors.inkMuted}>
+                      {t("signIn.demoTitle")}
+                    </AppText>
+                    <ListGroup>
+                      {DEMO_ACCOUNTS.map((a, i) => {
+                        const role = a.role
+                          ? roleLabel[a.role]
+                          : t("signIn.demoNoLedger");
+                        return (
+                          <View key={a.email}>
+                            {i > 0 ? <Divider /> : null}
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`${a.name}, ${role}`}
+                              accessibilityState={{
+                                disabled: !!busy,
+                                busy: busy === a.email,
+                              }}
+                              disabled={!!busy}
+                              onPress={() =>
+                                run(a.email, () => signInDev(a.email, a.name))
+                              }
+                              style={({ pressed }) => [
+                                styles.demoRow,
+                                pressed && { backgroundColor: colors.ground },
+                              ]}
+                            >
+                              <Avatar name={a.name} size={36} />
+                              <View style={{ flex: 1 }}>
+                                <AppText variant="bodyStrong" weight="bold">
+                                  {a.name}
+                                </AppText>
+                                <AppText
+                                  variant="caption"
+                                  color={colors.inkMuted}
+                                >
+                                  {role}
+                                </AppText>
+                              </View>
+                              {busy === a.email ? (
+                                <ActivityIndicator color={colors.sindoor} />
+                              ) : (
+                                <Feather
+                                  name="chevron-right"
+                                  size={20}
+                                  color={colors.inkMuted}
+                                />
+                              )}
+                            </Pressable>
+                          </View>
+                        );
+                      })}
+                    </ListGroup>
+                    <AppText variant="caption" color={colors.inkMuted}>
+                      {t("signIn.demoHint")}
+                    </AppText>
+                  </View>
+                  <AppText variant="label" color={colors.inkMuted}>
+                    {t("signIn.devOther")}
+                  </AppText>
                   <Field
                     label={t("signIn.devName")}
                     value={devName}
@@ -271,6 +340,14 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     minHeight: 44,
     paddingHorizontal: space.md,
+  },
+  demoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+    minHeight: 56,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
   },
   features: { gap: 14, marginTop: space.md },
   feature: { flexDirection: "row", alignItems: "center", gap: 14 },

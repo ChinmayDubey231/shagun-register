@@ -14,20 +14,28 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { AuthResponse, SyncPullResponse, SyncPushResponse } from '@shagun/shared';
+import { DEMO_ACCOUNTS, type AuthResponse, type MeResponse, type SyncPullResponse, type SyncPushResponse } from '@shagun/shared';
 import { createApp } from '../../../api/src/app';
 import { syncIndexes } from '../../../api/src/models';
 import { ensureSyncIndexes } from '../../../api/src/sync';
 import {
   addEntry,
   addJoinedFamily,
+  applyServerFamilies,
   createEvent,
   createLocalFamily,
   deleteEntry,
+  getCashCounts,
+  getCashSummary,
+  getDuplicateSuggestions,
   getEventEntries,
+  getEventSummaries,
   getEventSummary,
   getPeopleSummaries,
   getPersonHistory,
+  LedgerError,
+  listLocalFamilies,
+  loadLocalSetup,
   markFamilyRegistered,
   mergePeople,
   updateEntry,
@@ -78,7 +86,7 @@ class Phone {
 
   constructor(
     readonly name: string,
-    readonly auth: AuthResponse,
+    public auth: AuthResponse,
   ) {
     const sqlite = new Database(':memory:');
     const d = drizzle(sqlite, { schema });
@@ -383,5 +391,92 @@ describe('Week 5: a merge reaches every phone', () => {
       expect(people(p, familyId), p.name).toEqual([['Ramesh Sharma', 3200]]);
       expect(countRejected(p.db)).toBe(0);
     }
+  });
+});
+
+describe('Demo accounts', () => {
+  const [ASHA, ROHAN, MEENA] = DEMO_ACCOUNTS;
+
+  /** What signing in does on the phone: fetch the account's ledgers, then open and sync the current one. */
+  async function signInOn(phone: Phone, auth: AuthResponse) {
+    phone.auth = auth;
+    const me = await request(app).get('/me').set({ Authorization: `Bearer ${auth.accessToken}` });
+    expect(me.status).toBe(200);
+    applyServerFamilies(phone.db, auth.user.id, (me.body as MeResponse).families, ++clock);
+    const family = loadLocalSetup(phone.db, randomUUID, auth.user.id).family!;
+    phone.use(family.id, family.role);
+    await phone.sync();
+    return family;
+  }
+
+  it('fills a new phone with a ledger every screen has something to show for', async () => {
+    const phone = new Phone('A', await signInDev(ASHA.email, ASHA.name));
+    const family = await signInOn(phone, phone.auth);
+    expect(family).toMatchObject({ name: 'Sharma parivaar', role: 'owner' });
+    expect(listLocalFamilies(phone.db, phone.auth.user.id).map((f) => f.name)).toEqual(['Sharma parivaar', 'Yadav parivaar']);
+
+    const events = getEventSummaries(phone.db, family.id);
+    const today = new Date().toISOString().slice(0, 10);
+    expect(events.filter((e) => e.date >= today).map((e) => e.title).sort()).toEqual(["Dadaji's 75th Birthday", "Kunal Sharma's Wedding"]);
+    expect(events.filter((e) => e.date < today)).toHaveLength(6);
+    expect(new Set(events.map((e) => e.role))).toEqual(new Set(['hosted', 'attended']));
+
+    const wedding = events.find((e) => e.title === "Priya's Wedding")!;
+    expect(wedding.entryCount).toBe(15);
+    expect(new Set(getEventEntries(phone.db, wedding.id).map((e) => e.mode))).toEqual(new Set(['cash', 'upi', 'cheque', 'item']));
+    expect(getCashSummary(phone.db, wedding.id).loggedCash).toBe(13702);
+    expect(getCashCounts(phone.db, wedding.id).map((c) => c.countedAmount)).toEqual([13202]);
+
+    // People you've both given to and received from show on both sides.
+    const verma = getPeopleSummaries(phone.db, family.id).find((p) => p.displayName === 'Verma parivaar')!;
+    expect(verma.received).toBeGreaterThan(0);
+    expect(verma.given).toBeGreaterThan(0);
+
+    const suggestions = getDuplicateSuggestions(phone.db, family.id);
+    expect(suggestions.map((s) => s.reason).sort()).toEqual(['sameName', 'samePhone']);
+
+    // Nothing queued: the samples came down from the server.
+    expect(countUnsynced(phone.db)).toBe(0);
+  });
+
+  it('shares the ledger: an editor’s gift reaches the owner, and a viewer can’t add one', async () => {
+    const owner = new Phone('A', await signInDev(ASHA.email, ASHA.name));
+    const editor = new Phone('B', await signInDev(ROHAN.email, ROHAN.name));
+    const viewer = new Phone('C', await signInDev(MEENA.email, MEENA.name));
+    const family = await signInOn(owner, owner.auth);
+    await signInOn(editor, editor.auth);
+    await signInOn(viewer, viewer.auth);
+    const wedding = getEventSummaries(editor.db, family.id).find((e) => e.title === "Priya's Wedding")!;
+
+    editor.log(wedding.id, 'New guest', 2100);
+    await editor.sync();
+    await owner.sync();
+    await viewer.sync();
+    expect(getEventSummary(owner.db, family.id, wedding.id)!.entryCount).toBe(16);
+    expect(getEventSummary(viewer.db, family.id, wedding.id)!.entryCount).toBe(16);
+
+    expect(() => viewer.log(wedding.id, 'Another guest', 501)).toThrow(LedgerError);
+  });
+
+  it('switches accounts on one phone without losing data or keeping the old role', async () => {
+    const phone = new Phone('A', await signInDev(ASHA.email, ASHA.name));
+    const asOwner = await signInOn(phone, phone.auth);
+    const wedding = getEventSummaries(phone.db, asOwner.id).find((e) => e.title === "Priya's Wedding")!;
+
+    const meena = await signInDev(MEENA.email, MEENA.name);
+    const asViewer = await signInOn(phone, meena);
+    expect(asViewer).toMatchObject({ id: asOwner.id, role: 'viewer' });
+    expect(getEventSummary(phone.db, asViewer.id, wedding.id)!.entryCount).toBe(15);
+
+    // Gifts logged elsewhere meanwhile still arrive, under whichever account is signed in.
+    const editor = new Phone('B', await signInDev(ROHAN.email, ROHAN.name));
+    await signInOn(editor, editor.auth);
+    editor.log(wedding.id, 'New guest', 2100);
+    await editor.sync();
+    await phone.sync();
+    expect(getEventSummary(phone.db, asViewer.id, wedding.id)!.entryCount).toBe(16);
+
+    const backAsOwner = await signInOn(phone, await signInDev(ASHA.email, ASHA.name));
+    expect(backAsOwner).toMatchObject({ id: asOwner.id, role: 'owner' });
   });
 });

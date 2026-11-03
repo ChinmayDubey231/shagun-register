@@ -147,6 +147,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.lineStrong,
     paddingHorizontal: space.lg,
+    // Android's default padding pushes the code up off centre in a fixed-height box.
+    paddingVertical: 0,
     fontFamily: fonts.extrabold,
     fontSize: 26,
     letterSpacing: 8,

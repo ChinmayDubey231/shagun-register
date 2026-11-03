@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { devSignInSchema, googleSignInSchema, patchMeSchema, refreshSchema, type ApiUser, type FamilySummary, type MeResponse } from '@shagun/shared';
+import { DEMO_ACCOUNTS, devSignInSchema, googleSignInSchema, patchMeSchema, refreshSchema, type ApiUser, type FamilySummary, type MeResponse } from '@shagun/shared';
 import type { GoogleVerifier } from '../auth/google.js';
 import { issueTokens, revokeRefreshToken, rotateRefreshToken, signAccessToken } from '../auth/tokens.js';
+import { seedDemoLedgers } from '../demo.js';
 import { unauthenticated } from '../errors.js';
 import { limiter, requireAuth, validateBody } from '../middleware.js';
 import { Family, Membership, User, type UserDoc } from '../models.js';
@@ -36,10 +37,12 @@ export function authRoutes(opts: {
   });
 
   if (opts.devLogin) {
+    const devUser = (email: string, name: string) => upsertUser(`dev:${email}`, email, name);
     // Development only (config refuses it in production): sign in with just an email.
     r.post('/auth/dev', signInLimit, validateBody(devSignInSchema), async (req, res) => {
       const email = String(req.body.email).toLowerCase();
-      const user = await upsertUser(`dev:${email}`, email, req.body.name);
+      if (DEMO_ACCOUNTS.some((a) => a.email === email)) await seedDemoLedgers(devUser);
+      const user = await devUser(email, req.body.name);
       res.json(await issueTokens(user, opts.accessSecret));
     });
   }

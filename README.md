@@ -35,6 +35,13 @@ Weeks 1–6 are complete: an offline ledger, Hindi/English name matching, accoun
   - *हिंदी में देखें* on sign-in switches the screen to Hindi, and after developer sign-in the account's language is `hi`.
   - Setup, Home, a new event, Quick Entry, Events, People and More all show in Hindi, and a reload keeps it.
   - Choosing English on More switches the app at once and saves `en` to the account.
+- **An Android run** (Android 16 emulator in Expo Go, real API and MongoDB):
+  - **Hindi:** sign-in, setup, Home, a new event, Quick Entry, Events, People, a person's page, cash count, family members and More all read in Hindi with no clipped matras. A restart and a sign-out keep it, and a language changed on the account arrives at the next start, even behind the lock.
+  - **Locking:** ten seconds away doesn't relock, seventy seconds does, and a restart opens locked. Cancelling stays on the lock screen, and its button asks again.
+  - **Changing it:** turning it on or off asks first. Cancelling or a wrong PIN changes nothing.
+  - **Fingerprint:** a wrong finger is refused, and too many wrong tries fall back to the PIN.
+  - **No screen lock:** the switch stays off with a hint. If the screen lock is removed later, the app opens and the switch can still be turned off.
+  - **Exports:** the PDF register draws Hindi correctly, and both exports reach the share sheet with Hindi file names.
 
 What it does:
 - **Hindi** (`apps/mobile/src/i18n/hi.json`):
@@ -249,7 +256,11 @@ npm run typecheck
 **Expo Go vs development build:**
 - **Expo Go** runs everything except Google sign-in, invite-card scanning and Face ID. Use *Developer sign-in* (`EXPO_PUBLIC_DEV_LOGIN=1` in the app, `DEV_LOGIN=true` on the API).
   - The phone needs the Expo Go release for SDK 58. Expo CLI offers to install it when an older one is on the device.
+  - **Demo accounts:** the *Developer sign-in* card lists four accounts that need no typing. Asha, Rohan and Meena share two sample ledgers with different roles: people in English and Hindi, past and upcoming functions, every payment mode, a cash count ₹500 short and two merge suggestions. Kabir starts with no ledger, for trying setup and invite codes.
+    - The first demo sign-in writes the samples to the API's database (`apps/api/src/demo.ts`). Without `DEV_LOGIN` the route doesn't exist, and production refuses `DEV_LOGIN`.
+    - Later sign-ins leave your changes alone. Dates are counted from that first sign-in, so the upcoming functions pass after about six weeks. To start over, empty the local database.
 - **Google sign-in and card scanning need a development build**, because they're native modules: `npx expo run:android`, or `npx eas-cli@latest build --profile development --platform android`.
+  - **On Windows, keep the repo in a short folder** such as `C:\dev\shagun-register`. From a 73-character path, `npx expo run:android` stops with `ninja: error: mkdir(...)`: CMake repeats the repo path inside its build folders, which goes past Windows' 260-character limit. EAS builds in the cloud, so it isn't affected.
 
 ### Google sign-in setup (once)
 
@@ -288,10 +299,11 @@ npm run typecheck
   - **Small-caps labels** use the theme's `eyebrow` text style.
 - **Colour is for attention, not decoration.** Sindoor and marigold come from the UI kit. The sync status stays quiet when everything is saved and turns marigold only while changes wait on the phone. Direction is never shown by colour alone: received is blue with ↙, given is orange with ↗.
 - **Animations only move opacity and transforms on the native driver**, so typing is never delayed, and Reduce motion skips them.
+- **Forms avoid the keyboard with `behavior="padding"` on Android too.** With Android's edge-to-edge layout the window doesn't resize for the keyboard, so leaving `behavior` unset let it cover the field being typed in and the buttons below it.
 
 ## Next
 
 Still open from week 6:
 
-1. **Check on a phone:** the Hindi screens were checked in the web preview, and the app lock can only be tried on a phone or emulator.
+1. **Try it on a real phone and a development build:** the Android checks ran on an emulator in Expo Go, so a real fingerprint sensor, face unlock and a development build are still untried.
 2. **Recent-apps preview:** with App lock on, Android's recent-apps screen still shows the last screen. Hiding it (`FLAG_SECURE`) would also block screenshots, so it's left as a choice.
