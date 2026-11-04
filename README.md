@@ -8,222 +8,68 @@ A private family ledger for wedding and function gifts: log what you receive and
 
 React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript throughout.
 
-## Status: Week 6 done (Hindi, app lock)
+[Features](#features) · [Run it](#run-it) · [Deploy](#deploy) · [How it works](#how-it-works) · [Testing](#testing) · [Design decisions](#design-decisions) · [History](#history) · [Still open](#still-open)
 
-Weeks 1–6 are complete: an offline ledger, Hindi/English name matching, accounts and shared ledgers, sync between phones, duplicate merging, invite-card scanning and PDF/Excel exports, and now the whole app in Hindi and an app lock. Between weeks 4 and 5 the app also had a design pass:
+**Status:** all six planned weeks are complete, and demo accounts were added after them. The app has been checked in the web preview and on an Android emulator in Expo Go. Neither can run Google sign-in or invite-card scanning, so those still need a first run on a development build ([details](#still-open)).
 
-- **Sign-in opening animation:**
-  - The toran thread draws, marigolds drop and sway, the श mark pops, and a ₹ shagun coin lands with a glint.
-  - The name rises, शगुन रजिस्टर is inked in, and the rest staggers in (about 1.7 s).
-  - It uses React Native Animated on the native driver, with no new native libraries. With Reduce motion on, the finished screen shows at once.
-- **Branded headers:**
-  - **Home:** the ledger's initial sits on a sindoor monogram tile with a marigold dot, echoing the sign-in mark. A small-caps "FAMILY LEDGER" label sits over the ledger name, which is set in the Rozha One wordmark in sindoor. Tapping the name still opens the ledger switcher.
-  - **Sync status:** the green pill became a small-caps line facing that label. It reads **✓ ALL SAVED** in green when everything is on the server. While changes wait it turns marigold: **N TO SYNC**, **N ON PHONE** (offline) or **SYNCING…**.
-  - **Events, People and More** share one `TabHeading`: the ledger name in small caps, the tab name in the wordmark with a marigold full stop ("Events."), and a count where useful ("3 EVENTS", "12 IN LEDGER"). The count is hidden at zero.
-- **Fixes:**
-  - **Web preview database:** the preview at `http://localhost:8081` now opens its database. Expo serves the root page ahead of Metro's `enhanceMiddleware`, so the cross-origin isolation headers SQLite needs were missing on `/`. They're now set where the dev server is created.
-  - **Android subtitle:** "शगुन रजिस्टर" on sign-in is no longer cut to "शगुन". Android rounded the reveal box's width down a fraction of a pixel and wrapped the last word onto a clipped line.
+## Features
 
-## What each week delivered
+### At the venue
 
-### Week 6: Hindi and app lock
+- **Events:** your own function (gifts received) or another family's (gifts given). A wedding, griha pravesh, birthday, mundan or other, with sub-functions such as haldi, sangeet and reception.
+- **Quick Entry:** amount chips from ₹101 to ₹5,100, a keypad, payment mode (cash, UPI, cheque or item), relation, and **Save and next**.
+- **Offline first:** every save lands on the phone at once and goes up when there's a connection. The sync status shows **✓ ALL SAVED**, **N TO SYNC**, **N ON PHONE** (offline) or **SYNCING…**.
+- **Cash count:** compare logged cash with what you counted and see short, over or matches. A checklist of cash entries, largest first, helps find the missing envelope. Every count is kept as a record.
+- **Fix an entry:** long-press it on the event screen and choose Edit or Delete.
 
-**Done when** the whole app reads in Hindi, a language chosen on one phone follows the account to the others, and a phone with App lock on asks for its fingerprint, face or PIN before showing the ledger. These checks prove it:
-- **Translation tests** (`apps/mobile/src/i18n/i18n.test.ts`): `hi.json` has exactly the keys `en.json` has, the same `{{placeholders}}`, a form for each Hindi plural category, and Hindi text rather than copied English.
-- **Phone tests** (`apps/mobile/src/db/ledger.test.ts`): a language chosen on the phone stays pending until the account has it, an older save doesn't clear a newer choice, the account's language is taken without being sent back, an unknown value is ignored, and the lock setting is remembered.
-- **A browser run** (web preview, real API and MongoDB), with no page errors:
-  - *हिंदी में देखें* on sign-in switches the screen to Hindi, and after developer sign-in the account's language is `hi`.
-  - Setup, Home, a new event, Quick Entry, Events, People and More all show in Hindi, and a reload keeps it.
-  - Choosing English on More switches the app at once and saves `en` to the account.
-- **An Android run** (Android 16 emulator in Expo Go, real API and MongoDB):
-  - **Hindi:** sign-in, setup, Home, a new event, Quick Entry, Events, People, a person's page, cash count, family members and More all read in Hindi with no clipped matras. A restart and a sign-out keep it, and a language changed on the account arrives at the next start, even behind the lock.
-  - **Locking:** ten seconds away doesn't relock, seventy seconds does, and a restart opens locked. Cancelling stays on the lock screen, and its button asks again.
-  - **Changing it:** turning it on or off asks first. Cancelling or a wrong PIN changes nothing.
-  - **Fingerprint:** a wrong finger is refused, and too many wrong tries fall back to the PIN.
-  - **No screen lock:** the switch stays off with a hint. If the screen lock is removed later, the app opens and the switch can still be turned off.
-  - **Exports:** the PDF register draws Hindi correctly, and both exports reach the share sheet with Hindi file names.
+### Finding people
 
-What it does:
-- **Hindi** (`apps/mobile/src/i18n/hi.json`):
-  - **Coverage:** every screen and message, the Excel columns and the PDF register. The ledger is a बही, a gift a शगुन, a function a रस्म.
-  - **Choosing:** *Language* on More (English / हिंदी), or before sign-in from the link under the sign-in buttons.
-  - **Saving:** the app switches at once and the phone keeps the choice. It's also saved to the account (`PATCH /me`), and offline it goes up with the next account sync. A phone with no unsaved choice takes the account's language, so a change made on one phone reaches the others.
-  - **Formatting:** dates and months follow the language (14 फ़र॰ 2026). Amounts keep Indian grouping in Latin digits.
-  - **Small-caps labels in Devanagari** drop the letter spacing, which breaks the line along the top of the words, and go up a point.
-- **App lock** (More → *App lock*):
-  - **Locking:** when it's on, the app opens behind a lock screen and asks for the phone's fingerprint, face or PIN (`expo-local-authentication`). It asks again after a minute or more in the background, so a quick trip to the camera or the share sheet doesn't relock it.
-  - **Changing it:** turning it on or off asks for the same check first.
-  - **Needs a screen lock** on the phone. If that is removed later, the app opens rather than lock the family out of their own ledger.
-  - **Underneath:** the screens stay where they were, and screen readers can't reach them while locked.
-  - **Where it works:** Expo Go and builds on Android. Face ID on iOS needs a development build, and the web preview has no lock.
-
-### Week 5: duplicate merge, invite cards, exports
-
-**Done when** a merge made on one phone holds on every phone without losing a gift, an invite card fills in the new-event form, and an event or the whole ledger leaves the phone as a PDF or a spreadsheet. These checks prove it:
-- **Two-phone merge tests** (`apps/mobile/src/sync/sync.integration.test.ts`), against the real API and MongoDB:
-  - One phone merges "रमेश शर्मा" into "Ramesh Sharma" while the other, offline, logs a gift against "रमेश शर्मा". After syncing, both phones show one person with all three gifts.
-  - Two phones merge the same pair in opposite directions while offline. Both settle on one person with every gift.
-- **Merge API tests** (`apps/api/test/sync.test.ts`):
-  - Gifts that reach the server after the merge, or were already there, move to the kept person, and entry history keeps the old version.
-  - An edit from a phone that hadn't heard of the merge doesn't undo it.
-  - A loop is dropped, a chain of merges is followed, and a merge into another ledger's person is refused.
-- **Phone tests** (`apps/mobile/src/db/ledger.test.ts`): suggestions and "Not the same", moving gifts and hosted functions, filling blanks, the four queued changes, following a stale id, and refusals.
-- **Card-reading tests** (`apps/mobile/src/scan/parseInvite.test.ts`): English, Hindi (with Devanagari digits) and mixed wedding cards, a griha pravesh, a birthday with no year, a mundan, and unreadable text. Merging the two OCR readings is tested too.
-- **Export tests** (`apps/mobile/src/export/export.test.ts`): the workbook's parts, rows and number formats, and the register's grouping, totals, cash line and HTML escaping. A sample workbook also opens in openpyxl, and a 36-gift register renders in Chromium.
-- **A browser run** (web preview, real API and MongoDB), with no page errors:
-  - Two spellings of one guest come in by sync, and People shows "1 possible duplicate". Merging leaves one Ramesh Sharma with both gifts and the Hindi spelling and phone filled in.
-  - The Excel file downloads and the register opens for printing.
-  - The new-event form filled from a card creates the event.
-
-What it does:
+- **Hindi and English names match:** "Shri Ramesh Sharma ji", "रमेश शर्मा" and "Ramesh Sharmaa" all give the key `ramesh sharm`.
+- **Fuzzy search** in Quick Entry, Home, the People tab and the host-family field.
+- **Typed names are reused when unambiguous:** "Sunita Mishra" reuses "Smt. Sunita Mishra" when she is the only exact match, and asks you to pick when there are several.
+- **City for new people,** so "Ramesh Sharma (Indore)" and "Ramesh Sharma (Bhopal)" stay apart.
+- **Contacts:** permission is asked only the first time you tap "Search phone contacts". Contacts stay in memory unless you pick one, and writing to contacts is blocked in `app.json`.
+- **Person history:** All / Given / Received filters, "N exchanges since YYYY · last in Mon YYYY", and for an upcoming invite, what they gave you last time plus "Log what you gave".
 - **Duplicate merge:**
-  - **Suggestions** (`packages/shared/src/duplicates.ts`):
-    - People are suggested when they share a match key and their cities don't conflict, or when they share a 10-digit phone number. Cities are compared by consonant skeleton, so Indore and इंदौर agree.
-    - A banner on People leads to them. *Not the same* hides a pair on this phone.
-  - **Merge** (from a suggestion, or the merge icon on a person):
-    - Choose which entry stays. The other's gifts and hosted functions move across, and its city, phone, relation and Hindi spelling fill any blanks.
-    - The merged person keeps `mergedInto` instead of being deleted. Every change is queued, so the merge syncs like any edit.
-    - A link to the merged person opens the kept one, and Quick Entry follows a stale id.
-  - **On the server:**
-    - Merges stick like deletes: an edit from a phone that hadn't heard of the merge keeps it.
-    - Gifts and functions logged against the merged person on other phones move to the kept one.
-    - Chains are followed, and a loop (two phones merging opposite ways) is dropped.
-- **Scan invite card:**
-  - **Taking the photo:** take one, or choose one from the gallery, for example a card that came on WhatsApp.
-  - **Reading it:** a local Expo module (`apps/mobile/modules/invite-text`) runs Google ML Kit's Latin and Devanagari recognizers on the phone. Where both read the same line, the more confident reading wins.
-  - **Finding the details** (`apps/mobile/src/scan/parseInvite.ts`):
-    - the type, and the date of the main function: Hindi or English months, Devanagari digits, dd.mm.yyyy, or no year (the next time that date comes round);
-    - the couple or child, the host family and the venue;
-    - a wedding's functions: Sagai, Tilak, Haldi, Mehendi, Sangeet, Mayra, Wedding and Reception.
-  - **Filling the form:** the new-event form opens filled in as another family's function, with a note to check it. The recognized text stays viewable.
-  - **Privacy:** the photo stays in the app's cache and nothing is uploaded.
-  - **Where it works:** it needs an Android development or release build. Expo Go, iOS and the web preview offer *Type it in instead*. The bundled models add about 4 MB per script per CPU architecture.
-- **Exports** (`apps/mobile/src/export`), made from the phone's own database, so they work offline; viewers can export too:
-  - **PDF register** (the share icon on an event):
-    - totals, the split by mode, and the latest cash count against cash logged;
-    - every gift in the order it was logged, grouped by function with subtotals.
-    - It's A4, made with expo-print and shared with expo-sharing.
-  - **Excel** (More → *Export to Excel*):
-    - Gifts, People and Events sheets, with real dates and amounts as numbers in Indian grouping (12,34,567);
-    - frozen headers and filters.
-    - A small SpreadsheetML writer zipped with fflate (`xlsx.ts`) makes it, with no native code.
+  - People are suggested when they share a match key and their cities don't conflict (Indore and इंदौर agree), or when they share a 10-digit phone number. Suggestions are never merged automatically.
+  - You choose which entry stays. The other's gifts and hosted functions move across, and its city, phone, relation and Hindi spelling fill any blanks.
+  - A merge made on one phone reaches the others, including gifts logged offline against the merged person.
 
-### Week 4: sync between phones
+### Sharing with family
 
-**Done when** two phones log entries offline at the same time and both end up with every entry. Three checks prove it:
-- **Two-phone integration test** (`apps/mobile/src/sync/sync.integration.test.ts`). Two real SQLite databases run the app's own ledger and sync code against the real API on a real MongoDB replica set. It automates the guide's manual offline test:
-  - Both phones go offline and log 10 gifts each. Then one edits a gift the other logged, and the other deletes a different one.
-  - They come back online in either order. Both end with 19 live entries, the edit and the delete, and identical totals.
-  - Also covered: a push whose reply is lost (retried without doubling or new sequence numbers), a pull cut off between pages (resumes), a local change made during a pull (kept, then pushed), an edit racing a delete (the delete wins on both phones), and a change the server refuses (parked, not retried forever).
-- **Sync API tests** (`apps/api/test/sync.test.ts`): sequence order and paging, roles, safe retries, last-write-wins with history, deletes winning, partial rejection, cross-family id hijack refused, and two concurrent pushes getting gap-free sequence numbers 1–40.
-- **A two-phone browser run.** Both phones lose the server and log gifts (3 and 4). Each shows how many changes are waiting and that it's offline. Coming back online syncs by itself. Both end with all 7, and a correction made on one phone shows on the other. All 13 checks pass.
+- **Shared ledgers:** create a ledger (works offline), then share a 6-character invite code. A code stays valid for 48 hours and can be used more than once.
+- **Sync between phones:** relatives can log offline at the same wedding and both end up with every gift. A language or role change made elsewhere arrives the next time the app opens.
+- **Roles:**
 
-What it does:
-- **API** (`apps/api/src/sync.ts`, `routes/sync.ts`):
-  - **`POST /sync/push`** takes up to 100 outbox changes. Each record is validated on its own, so one bad record doesn't sink the batch. Every write takes the family's next sequence number (`families.lastSeq`, `$inc`) in the same MongoDB transaction as the write. A pull therefore can never see seq 11 while seq 10 is still uncommitted.
-  - **`GET /sync/pull?since=`** returns records above `since` across all four tables in seq order, up to 500 a page with `hasMore`. The phone's clock is never used for ordering.
-  - **Conflict rules:**
-    - New records never conflict (UUIDs made on the phone).
-    - For edits, the last write to reach the server wins, and the replaced version of an entry goes to `entryHistory` (`GET /families/:id/entries/:entryId/history`).
-    - Deletes are soft and win over later edits.
-    - An identical retry changes nothing and gets no new seq.
-  - **The server doesn't trust the phone** for the person match key (recomputed) or for who logged a gift (`createdBy` comes from the token).
-- **Phone** (`apps/mobile/src/sync/engine.ts`, `src/lib/sync.ts`):
-  - **Push, then pull.** Accepted outbox rows are deleted. Refused ones are parked with the reason and shown on More as "not accepted by the server". The server's canonical copy is written back at once, so a late edit to a deleted gift corrects itself.
-  - **Pull** upserts each record unless it still has a pending local change, and saves `lastPulledSeq` in the same SQLite transaction. Interrupting it at any point loses and doubles nothing.
-  - **Triggers:** startup and sign-in, back to the foreground, connection back, 5 s after a save (so a burst of gifts goes up as one batch), pull-to-refresh on every list, and *Sync now* on More. There is one sync at a time; a request mid-sync runs once more straight after.
-  - **"Online" means our server answers:** NetInfo checks `/health` instead of a Google URL, and the phone retries every 30 s while the last attempt failed.
-  - **Status:** the Home header reads *Syncing…*, *N on phone* (offline), *N to sync* or *All saved*; More shows the same as a pill. A gift to a new guest counts as one change, not two. More also shows when the phone last synced and any refused changes.
-  - **Role lost while offline:** if this account became a viewer, its queued changes are parked rather than retried, and pulling continues.
+| | Owner | Editor | Viewer |
+|---|---|---|---|
+| See and export the ledger | ✓ | ✓ | ✓ |
+| Log, edit and merge | ✓ | ✓ | |
+| Invite, change roles, remove members | ✓ | | |
+| Rename or delete the ledger | ✓ | | |
+| Leave the ledger | | ✓ | ✓ |
 
-### Week 3: backend and accounts
+### Invite cards and exports
 
-**Done when** two family members can join the same ledger. Two checks prove it:
-- **API tests** (`apps/api/test/accounts.test.ts`) run against a real MongoDB replica set.
-- **A two-phone browser run** uses separate browsers, the real API and MongoDB. Chinmay signs in and creates "Dubey parivaar" offline-first, then makes an editor invite code. Neha signs in on the second phone and joins with the code (typed lower-case with a dash). Both see the two members. When Chinmay makes Neha a viewer, her phone goes read-only on the next launch. All 13 checks pass.
+- **Scan an invite card:** take a photo, or choose one from the gallery, and the new-event form opens filled in with a note to check it.
+  - It finds the type, the date (Hindi or English months, Devanagari digits, dd.mm.yyyy, or no year), the couple or child, the host family, the venue, and a wedding's functions.
+  - ML Kit reads Latin and Devanagari on the phone, and the photo isn't uploaded.
+- **PDF register** (the share icon on an event): A4, with totals, the split by mode, the latest cash count against cash logged, and every gift grouped by function with subtotals.
+- **Excel** (More → *Export to Excel*): Gifts, People and Events sheets, with real dates, amounts as numbers in Indian grouping (12,34,567), frozen headers and filters.
+- Both are made from the phone's own database, so they work offline, and viewers can export too.
 
-What it does:
-- **API** (Express 5 + Mongoose, `apps/api`):
-  - **Sign-in:** Google ID tokens are verified on the server (audience = your web client ID). The server issues its own 15-minute JWTs and 30-day refresh tokens. Refresh tokens are stored hashed and replaced on every use; reusing an old one revokes all of that user's tokens.
-  - **Endpoints:** `POST /auth/google`, `/auth/refresh`, `/auth/logout`, `GET/PATCH /me`, `POST /families` (idempotent: the phone sends the id it made offline), `GET/PATCH/DELETE /families/:id`, invites (create / list / cancel / accept), and member role change or removal.
-  - **Roles:** one middleware enforces the guide's role table. Non-members get 404, not 403, so family ids can't be probed.
-  - **Invite codes:** 6 characters with no look-alikes (0/O/1/I/L), 48-hour TTL, reusable until they expire, and guessing is rate-limited per user.
-  - **Safety:** one error shape everywhere, request logs without bodies, and the config refuses `DEV_LOGIN` in production.
-- **App:**
-  - **Sign-in:** Google sign-in (development build), plus an optional email-only *Developer sign-in* for emulators.
-  - **Tokens:** kept in the Android Keystore via expo-secure-store and refreshed automatically. Being signed in works offline.
-  - **Getting into a ledger:** create (offline; registered with the server when online) or join with a code.
-  - **Family members:** invite code with Share, roles, remove, leave.
-  - **Switching:** tap the ledger name in the Home header to switch ledgers; sign out from More.
-  - **Viewers:** the app is read-only for them (no New event / Log a gift / edit), and the write path refuses too.
-- **On this phone:**
-  - **Per-account ledgers:** another account signing in on the same phone doesn't see them. Ledgers made before sign-in existed are claimed by the first account.
-  - **Server changes picked up:** whenever the app opens or comes to the foreground it applies renames and role changes, adds ledgers joined on another phone, and deletes ledgers you were removed from (records included).
+### Language and privacy
 
-### Week 2: Hindi/English name matching, search, cash count
-
-- **Hindi/English match key** (`packages/shared/src/matchKey.ts`):
-  - Removes honorifics (Shri, Smt, ji, Dr, श्री, जी, डॉ …).
-  - Converts Devanagari to Latin, dropping the silent "a" the way Hindi names are actually spelled (कमला → kamla, not kamala).
-  - Folds spelling variants: aa→a, ee→i, oo→u, w→v, ph→f, x→ks, doubled letters, word-final ey→e, trailing a.
-  - Results: "Shri Ramesh Sharma ji", "रमेश शर्मा" and "Ramesh Sharmaa" all give `ramesh sharm`.
-- **Fuzzy search** with Fuse.js on the match key, with prefix and consonant-skeleton matches ranked first.
-  - Used in Quick Entry, Home search, the People tab and the host-family field.
-  - People stored with an older key are re-keyed once at startup.
-- **Typed names are reused when unambiguous.** Typing "Sunita Mishra" without picking a suggestion reuses "Smt. Sunita Mishra" when she is the only exact match, and asks you to pick when there are several.
-- **Contacts import** (expo-contacts):
-  - Permission is asked only the first time you tap "Search phone contacts". Matches appear under the people suggestions.
-  - Contacts are held in memory and never stored unless you pick one.
-  - Contact *writes* are blocked in `app.json`.
-- **City for new people**, so "Ramesh Sharma (Indore)" and "Ramesh Sharma (Bhopal)" stay apart.
-- **Person history:**
-  - An upcoming-invite card ("They gave ₹2,100 at …" plus "Log what you gave").
-  - All / Given / Received filters, and "N exchanges since YYYY · last in Mon YYYY".
-  - An edit screen for name, city, phone and relation.
-- **Fix an entry:** long-press it on the event screen and choose Edit or Delete. Quick Entry opens in edit mode, keeping the entry's id and creation time.
-- **Cash reconciliation:**
-  - Logged cash vs. counted cash, with a short / over / matches banner.
-  - A checklist of cash entries (largest first) for finding the missing envelope.
-  - Every saved count is kept as an audit trail and queued for sync.
-- **People tab:** relation filter chips.
-
-### Week 1: offline app foundation
-
-- **Setup:** first launch asks you to name the family ledger.
-- **Events:** your own function or another family's, with sub-functions.
-- **Quick Entry:** amount chips, keypad, mode, relation, and **Save and next**.
-- **Event detail:** totals and per-entry sync marks.
-- **Other screens:** Home, People and person history.
-- **Saved for sync:** every save writes an outbox row in the same SQLite transaction.
-
-## Repository layout
-
-```
-apps/
-  mobile/            Expo app (Expo Router, routes in src/app/)
-    src/app/         Screens: sign-in, setup, (tabs)/ Home · Events · People · More, events/, people/ (incl. duplicates, merge), family/, scan-invite
-    src/components/  SignInIntro (opening animation), LockScreen, layout (TabHeading, cards), ledger (SyncStatus, SyncPill, entry rows)
-    src/db/          Drizzle schema, write path + queries (ledger.ts), useDbQuery hook
-    src/sync/        Sync engine (push/pull, no Expo imports) + two-phone integration test
-    src/lib/         API client, account, language, app lock, sync triggers, exports (build a file, open the share sheet)
-    src/export/      Excel writer (xlsx.ts), ledger workbook, event register HTML
-    src/scan/        Invite-card parser and merging of the two OCR readings
-    src/theme/       Tokens from the design's UI kit: colours, spacing, type scale (incl. eyebrow)
-    src/i18n/        en.json, hi.json, and a test that keeps their keys and placeholders matching
-    drizzle/         Generated SQL migrations
-    modules/invite-text/  Local Expo module (Android): ML Kit text recognition, Latin + Devanagari
-    metro.config.js  .sql imports, wasm assets, and the web preview's cross-origin isolation headers
-  api/               Express 5 + Mongoose: auth, families, invites, roles, sync
-    src/sync.ts      Push/pull, sequence numbers, conflict rules, entry history
-    src/routes/      auth.ts (Google, refresh, /me), families.ts (families, invites, members), sync.ts
-    test/            supertest + mongodb-memory-server (real replica set)
-packages/
-  shared/            zod schemas, API contract, match key, duplicate suggestions, rupee formatting — used by phone and server
-```
+- **Hindi and English:** every screen and message, the Excel columns and the PDF register.
+  - Choose on More, or before sign-in from *हिंदी में देखें*. The choice is saved on the phone and on the account, so your other phones follow.
+  - Dates follow the language (14 फ़र॰ 2026). Amounts keep Indian grouping in Latin digits.
+- **App lock** (More → *App lock*): asks for the phone's fingerprint, face or PIN when the app opens and after a minute or more away, so a quick trip to the camera doesn't relock it. It needs a screen lock on the phone. If that is removed later, the app opens rather than lock the family out of their own ledger.
 
 ## Run it
 
-Requires Node 22+ and MongoDB **running as a replica set**, because sync uses transactions. MongoDB Atlas always is one. For a local database, start a single-node replica set once:
+You need **Node 22+** and **MongoDB running as a replica set**, because sync uses transactions. MongoDB Atlas always is one.
+
+**1. Start a local database** (once):
 
 ```bash
 mkdir -p ~/shagun-mongo        # data folder, kept outside the repo
@@ -233,34 +79,122 @@ mongosh --port 27017 --eval 'rs.initiate({ _id: "rs0", members: [{ _id: 0, host:
 
 If something else already uses port 27017 (for example a MongoDB Windows service), pick another port and change it in `MONGODB_URI`.
 
+**2. Install and configure.** The example values work for a local run on an Android emulator:
+
 ```bash
 npm install
-cp apps/api/.env.example apps/api/.env        # MONGODB_URI, JWT_ACCESS_SECRET (32+ chars), DEV_LOGIN=true for local
-cp apps/mobile/.env.example apps/mobile/.env  # EXPO_PUBLIC_API_URL, EXPO_PUBLIC_DEV_LOGIN=1, Google web client ID
+cp apps/api/.env.example apps/api/.env
+cp apps/mobile/.env.example apps/mobile/.env
+```
+
+> **Keep `MONGODB_URI` on a test database while developing.** `npm run api` syncs indexes on whatever database it names, and with `DEV_LOGIN` on, a demo sign-in writes sample ledgers there.
+
+**3. Start the API and the app:**
+
+```bash
 npm run api       # API on http://localhost:4000/health
 npm run mobile    # Expo dev server
-npm test          # all workspaces (API tests download a MongoDB binary the first time)
-npm run typecheck
 ```
+
+**4. Open the app** using one of the options below, tap *Developer sign-in* and pick a [demo account](#demo-accounts).
 
 ### Where to open the app
 
+- **Android emulator:** press `a` in the Expo dev server.
+  - The emulator reaches your computer at `http://10.0.2.2:4000`, the default in `apps/mobile/.env.example`.
+  - Alternatively, use `http://localhost:4000` and run `adb reverse tcp:4000 tcp:4000`. Run it again after every emulator restart.
+- **Phone on the same Wi-Fi:** set `EXPO_PUBLIC_API_URL=http://<your computer's LAN IP>:4000`, then scan the QR code with Expo Go. The phone needs the Expo Go release for SDK 58, and Expo CLI offers to install it when an older one is on the device.
 - **Web preview:** run `npm --workspace apps/mobile run web`, then open `http://localhost:8081`.
   - Set `EXPO_PUBLIC_API_URL=http://localhost:4000` in the app, and keep `CORS_ORIGINS=http://localhost:8081` on the API.
-  - SQLite runs as WebAssembly and needs `SharedArrayBuffer`. The dev server sends the required `Cross-Origin-Embedder-Policy` and `Cross-Origin-Opener-Policy` headers (see `metro.config.js`); a hosted web build must send them too.
-- **Android emulator:** run `npm run mobile`, then press `a` (or run `npx expo start --android`).
-  - The emulator reaches your computer at `http://10.0.2.2:4000`, which is the default in `apps/mobile/.env.example`.
-  - Alternatively, keep `http://localhost:4000` and run `adb reverse tcp:4000 tcp:4000`. Run it again after every emulator restart.
-- **Phone on the same Wi-Fi:** set `EXPO_PUBLIC_API_URL=http://<your computer's LAN IP>:4000`, then scan the QR code with Expo Go.
+  - SQLite runs as WebAssembly and needs `SharedArrayBuffer`. The dev server sends the required cross-origin isolation headers (see `metro.config.js`), and a hosted web build must send them too.
 
-**Expo Go vs development build:**
-- **Expo Go** runs everything except Google sign-in, invite-card scanning and Face ID. Use *Developer sign-in* (`EXPO_PUBLIC_DEV_LOGIN=1` in the app, `DEV_LOGIN=true` on the API).
-  - The phone needs the Expo Go release for SDK 58. Expo CLI offers to install it when an older one is on the device.
-  - **Demo accounts:** the *Developer sign-in* card lists four accounts that need no typing. Asha, Rohan and Meena share two sample ledgers with different roles: people in English and Hindi, past and upcoming functions, every payment mode, a cash count ₹500 short and two merge suggestions. Kabir starts with no ledger, for trying setup and invite codes.
-    - The first demo sign-in writes the samples to the API's database (`apps/api/src/demo.ts`). Without `DEV_LOGIN` the route doesn't exist, and production refuses `DEV_LOGIN`.
-    - Later sign-ins leave your changes alone. Dates are counted from that first sign-in, so the upcoming functions pass after about six weeks. To start over, empty the local database.
-- **Google sign-in and card scanning need a development build**, because they're native modules: `npx expo run:android`, or `npx eas-cli@latest build --profile development --platform android`.
-  - **On Windows, keep the repo in a short folder** such as `C:\dev\shagun-register`. From a 73-character path, `npx expo run:android` stops with `ninja: error: mkdir(...)`: CMake repeats the repo path inside its build folders, which goes past Windows' 260-character limit. EAS builds in the cloud, so it isn't affected.
+### What works where
+
+| | Web preview | Expo Go on Android | Android development or release build |
+|---|---|---|---|
+| Ledger, events, gifts, people, sync, merge | ✓ | ✓ | ✓ |
+| Hindi | ✓ | ✓ | ✓ |
+| Developer sign-in and demo accounts | ✓ | ✓ | When enabled |
+| Google sign-in | | | ✓ |
+| Invite-card scanning | *Type it in instead* | *Type it in instead* | ✓ |
+| App lock | | ✓ | ✓ |
+| Contacts | | ✓ | ✓ |
+| Sign out, entry long-press menu, member actions | | ✓ | ✓ |
+| PDF register | Opens for printing | Share sheet | Share sheet |
+| Excel | Downloads | Share sheet | Share sheet |
+
+The web preview's gaps in the sign-out row come from `Alert.alert`, which does nothing on react-native-web, so those actions need a phone.
+
+iOS hasn't been checked. Card scanning is Android only, Face ID needs a development build, and Google sign-in needs `GOOGLE_IOS_URL_SCHEME`.
+
+### Demo accounts
+
+With `EXPO_PUBLIC_DEV_LOGIN=1` in the app and `DEV_LOGIN=true` on the API, the *Developer sign-in* card lists four accounts that need no typing:
+
+| Account | Sharma parivaar | Yadav parivaar |
+|---|---|---|
+| Asha Sharma | Owner | Viewer |
+| Rohan Sharma | Editor | Owner |
+| Meena Sharma | Viewer | Editor |
+| Kabir Joshi | | |
+
+- **The ledgers** have people in English and Hindi, past and upcoming functions, every payment mode, a cash count ₹500 short and two merge suggestions.
+- **Kabir** starts with no ledger, for trying setup and invite codes.
+- **Seeding:** the first demo sign-in writes the samples to the API's database (`apps/api/src/demo.ts`). Without `DEV_LOGIN` the route doesn't exist, and production refuses `DEV_LOGIN`.
+- **Later sign-ins** leave your changes alone. Dates are counted from the first sign-in, so the upcoming functions pass after about six weeks. To start over, drop the API's database, and the next demo sign-in seeds it again.
+
+### Development build
+
+Google sign-in and card scanning are native modules, so they need a development build rather than Expo Go. Run these from `apps/mobile`:
+
+- **Local:** `npx expo run:android`
+  - **On Windows, keep the repo in a short folder** such as `C:\dev\shagun-register`. From a 73-character path, the build stops with `ninja: error: mkdir(...)`: CMake repeats the repo path inside its build folders, which goes past Windows' 260-character limit.
+- **In the cloud with EAS,** which isn't affected by the path limit. The repo has no `eas.json` and doesn't include `expo-dev-client`, so add them first:
+
+  ```bash
+  npx expo install expo-dev-client
+  npx eas-cli@latest build:configure
+  npx eas-cli@latest build --profile development --platform android
+  ```
+
+The bundled ML Kit models add about 4 MB per script per CPU architecture.
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `npm run api` | API with reload on save, on port 4000 |
+| `npm run mobile` | Expo dev server |
+| `npm --workspace apps/mobile run android` | Expo dev server, opening Android |
+| `npm --workspace apps/mobile run web` | Web preview on port 8081 |
+| `npm test` | Tests in all workspaces |
+| `npm run typecheck` | Type checks in all workspaces |
+| `npm --workspace apps/mobile run db:generate` | SQL migration after changing `src/db/schema.ts` |
+
+### Configuration
+
+**API** (`apps/api/.env`):
+
+| Variable | Needed | Purpose |
+|---|---|---|
+| `MONGODB_URI` | Always | Must be a replica set |
+| `JWT_ACCESS_SECRET` | Always | Signs access tokens, 32+ characters |
+| `GOOGLE_CLIENT_IDS` | In production | The **web** OAuth client ID, comma-separated. The API won't start in production without it |
+| `DEV_LOGIN` | Local only | `true` enables email-only sign-in. The API won't start in production with it on |
+| `CORS_ORIGINS` | Web preview only | Allowed browser origins, comma-separated |
+| `PORT` | Optional | Defaults to 4000 |
+| `NODE_ENV` | Optional | Defaults to `development` |
+
+**App** (`apps/mobile/.env`). `EXPO_PUBLIC_*` values are baked into the app bundle, so never put a secret in them:
+
+| Variable | Purpose |
+|---|---|
+| `EXPO_PUBLIC_API_URL` | Where the API runs |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | The **web** OAuth client ID. Turns on Google sign-in in native builds |
+| `EXPO_PUBLIC_DEV_LOGIN` | `1` shows *Developer sign-in*. Never set it in release builds |
+| `GOOGLE_IOS_URL_SCHEME` | iOS only: the reversed iOS client ID |
+
+## Deploy
 
 ### Google sign-in setup (once)
 
@@ -269,11 +203,11 @@ npm run typecheck
    - `GOOGLE_CLIENT_IDS` on the API
    - `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` in the app
 3. Create an OAuth client of type **Android**, with package `com.shagunregister.app` and the SHA-1 of your signing key.
-   - Debug build: `cd apps/mobile/android && ./gradlew signingReport`
+   - Debug build: `cd apps/mobile/android && ./gradlew signingReport` (the folder appears after the first `npx expo run:android`)
    - EAS builds: `npx eas-cli@latest credentials`
    - Play Console: the app signing key's SHA-1, under *App integrity*. Add that one too.
 
-### Deploy the API (Render + MongoDB Atlas)
+### API on Render + MongoDB Atlas
 
 1. **Database:** create a free MongoDB Atlas cluster and a database user. Under Network Access, allow `0.0.0.0/0`: Render's free tier has no fixed IPs, and the user password protects access. Copy the connection string.
 2. **Render:** create a Blueprint from `render.yaml` in this repository ([github.com/ChinmayDubey231/shagun-register](https://github.com/ChinmayDubey231/shagun-register)). It asks for `MONGODB_URI` and `GOOGLE_CLIENT_IDS`, and generates `JWT_ACCESS_SECRET` itself.
@@ -281,29 +215,175 @@ npm run typecheck
    - Free Render services sleep after 15 minutes idle, so the first request takes about 30 s.
    - Nothing breaks while it sleeps: the app works offline and retries.
 
+## How it works
+
+```
+Phone                                             Server
+Screens ⇄ SQLite (records + outbox) ⇄ sync engine ⇄ Express API ⇄ MongoDB (replica set)
+```
+
+Screens only ever read and write SQLite. The sync engine moves changes between the phone and the server in the background, so the app behaves the same with or without a connection.
+
+**Stack:**
+- **App:** Expo Router, expo-sqlite with Drizzle, Zustand, i18next, Fuse.js, and a local Expo module for ML Kit.
+- **API:** Express 5, Mongoose, zod and Google Auth Library, run with tsx.
+- **Shared:** zod schemas, the API contract and the match key, used by both sides.
+
+### Repository layout
+
+```
+apps/
+  mobile/                 Expo app (npm workspace @shagun/mobile)
+    src/app/              Screens: sign-in, setup, scan-invite, (tabs)/ Home · Events · People · More, events/, people/, family/
+    src/components/       SignInIntro (opening animation), LockScreen, SyncDriver, layout (TabHeading, cards), ledger (SyncStatus, SyncPill, entry rows)
+    src/db/               Drizzle schema, write path and queries (ledger.ts), useDbQuery hook
+    src/sync/             Sync engine (push/pull, no Expo imports) and the two-phone integration test
+    src/lib/              API client, account, language, app lock, contacts, sync triggers, exports (build a file, open the share sheet)
+    src/store/            Session state
+    src/export/           Excel writer (xlsx.ts), ledger workbook, event register HTML
+    src/scan/             Invite-card parser and merging of the two OCR readings
+    src/theme/            Tokens from the design's UI kit: colours, spacing, type scale
+    src/i18n/             en.json, hi.json, and a test that keeps their keys and placeholders matching
+    drizzle/              Generated SQL migrations
+    modules/invite-text/  Local Expo module (Android): ML Kit text recognition, Latin + Devanagari
+    metro.config.js       .sql imports, wasm assets, and the web preview's cross-origin isolation headers
+  api/                    Express API (npm workspace @shagun/api)
+    src/routes/           auth.ts (Google, dev sign-in, refresh, /me), families.ts (families, invites, members), sync.ts
+    src/sync.ts           Push/pull, sequence numbers, conflict rules, entry history
+    src/demo.ts           Sample ledgers for the demo accounts
+    test/                 supertest + mongodb-memory-server (real replica set)
+packages/
+  shared/                 zod schemas, API contract, match key, duplicate suggestions, rupee formatting, demo account list
+docs/                     App icon
+render.yaml               Render Blueprint for the API
+```
+
+### Data
+
+| Where | Tables | Purpose |
+|---|---|---|
+| Phone and server | `people`, `events`, `entries`, `cashCounts` | The ledger, synced per family |
+| Phone only | `outbox`, `sync_meta`, `app_settings` | Waiting changes, sync position and role per ledger, device settings |
+| Server only | `users`, `families`, `memberships`, `invites`, `refreshTokens`, `entryHistory` | Accounts, access, sequence counters, replaced versions of entries |
+
+### Sync
+
+Every save writes the record and an outbox row in one SQLite transaction. Sync then runs as **push, then pull**.
+
+- **Push** (`POST /sync/push`) takes up to 100 changes.
+  - Each record is validated on its own, so one bad record doesn't sink the batch. Refused records are parked with the reason and shown on More.
+  - Every write takes the family's next sequence number (`families.lastSeq`, `$inc`) in the same MongoDB transaction as the write. A pull therefore can never see seq 11 while seq 10 is still uncommitted.
+- **Pull** (`GET /sync/pull`) returns records above `since` across all four tables in seq order, up to 500 a page with `hasMore`. The phone's clock is never used for ordering.
+  - The phone upserts each record unless it still has a pending local change, and saves `lastPulledSeq` in the same SQLite transaction. Interrupting it at any point loses and doubles nothing.
+- **Conflict rules:**
+  - New records never conflict, because ids are UUIDs made on the phone.
+  - For edits, the last write to reach the server wins, and the replaced version of an entry goes to `entryHistory`.
+  - Deletes are soft and win over later edits.
+  - An identical retry changes nothing and gets no new seq.
+  - Merges stick like deletes. Anything that arrives late for a merged person moves to the kept one, chains are followed, and a loop (two phones merging opposite ways) is dropped.
+- **The server doesn't trust the phone** for the person match key (recomputed) or for who logged a gift (`createdBy` comes from the token).
+- **Triggers:** startup and sign-in, back to the foreground, connection back, 5 s after a save (so a burst of gifts goes up as one batch), pull-to-refresh on every list, and *Sync now* on More. There is one sync at a time, and a request mid-sync runs once more straight after.
+- **"Online" means our server answers:** NetInfo checks `/health` instead of a Google URL, and the phone retries every 30 s while the last attempt failed.
+- **Role lost while offline:** if this account became a viewer, its queued changes are parked rather than retried, and pulling continues.
+
+### Accounts and security
+
+- **Tokens:** the server verifies Google ID tokens (audience = your web client ID), then issues its own 15-minute JWTs and 30-day refresh tokens. Refresh tokens are stored hashed and replaced on every use. Reusing an old one revokes all of that user's tokens.
+- **On the phone:** tokens are kept in the Android Keystore via expo-secure-store, and being signed in works offline. Ledgers are per account, so another account signing in on the same phone doesn't see them.
+- **Access:** one middleware enforces the role table. Non-members get 404, not 403, so family ids can't be probed. The phone's write path also refuses viewers.
+- **Invite codes** have no look-alike characters (0/O/1/I/L).
+- **Rate limits:** sign-in and refresh allow 30 attempts per 15 minutes, and invite codes allow 10 per 15 minutes per user.
+- **Logs and errors:** request logs never include bodies, which carry names and amounts. Every error has the shape `{ error: { code, message } }`.
+
+### API
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /health` | Anyone | Health check |
+| `POST /auth/google` | Anyone | Sign in with a Google ID token |
+| `POST /auth/dev` | Anyone, only with `DEV_LOGIN` | Email-only sign-in, which also seeds the demo ledgers for a demo account |
+| `POST /auth/refresh`, `POST /auth/logout` | Holder of a refresh token | Replace or revoke it |
+| `GET /me`, `PATCH /me` | Signed in | The account and its ledgers; change name or language |
+| `POST /families` | Signed in | Register a ledger. Idempotent: the phone sends the id it made offline |
+| `GET /families/:id` | Viewer and up | Ledger details and members |
+| `PATCH /families/:id`, `DELETE /families/:id` | Owner | Rename or delete |
+| `POST /families/:id/invites`, `GET …/invites`, `DELETE …/invites/:code` | Owner | Create, list or cancel invites |
+| `POST /invites/:code/accept` | Signed in | Join. Joining again never changes a role |
+| `PATCH /families/:id/members/:userId` | Owner | Change a role |
+| `DELETE /families/:id/members/:userId` | Owner, or the member themselves | Remove or leave. The owner can't leave |
+| `POST /sync/push` | Editor and up | Send outbox changes |
+| `GET /sync/pull?familyId=&since=&limit=` | Viewer and up | Fetch changes |
+| `GET /families/:id/entries/:entryId/history` | Viewer and up | Replaced versions of an entry |
+
+## Testing
+
+```bash
+npm test            # all workspaces
+npm run typecheck
+```
+
+The tests start their own in-memory MongoDB replica set, so they never touch the database in `.env`. The MongoDB binary downloads the first time.
+
+| Tests | Cover |
+|---|---|
+| `packages/shared/src/*.test.ts` | Match key and transliteration, duplicate suggestions, rupee formatting, the amount keypad, schemas |
+| `apps/api/test/accounts.test.ts` | Sign-in, token rotation, rate limits, roles, invites, refusing `DEV_LOGIN` in production |
+| `apps/api/test/sync.test.ts` | Sequence order and paging, conflict rules, safe retries, concurrent pushes, merges |
+| `apps/api/test/demo.test.ts` | Seeding once, roles, nothing added without `DEV_LOGIN` |
+| `apps/api/test/app.test.ts` | Health, error shape, CORS |
+| `apps/mobile/src/db/ledger.test.ts` | The write path on real SQLite: atomic saves, names, cash, merges, accounts, language and lock settings |
+| `apps/mobile/src/sync/sync.integration.test.ts` | Two real SQLite phones running the app's own sync code against the real API and MongoDB |
+| `apps/mobile/src/scan/parseInvite.test.ts` | English, Hindi and mixed cards, and merging the two OCR readings |
+| `apps/mobile/src/export/export.test.ts` | Workbook parts and number formats, and the register's grouping, totals and HTML escaping |
+| `apps/mobile/src/i18n/i18n.test.ts` | `hi.json` matches `en.json`: keys, placeholders, plural forms, and real Hindi rather than copied English |
+
+The integration test covers the main promise of the app. Both phones go offline and log 10 gifts each, one edits a gift the other logged, and the other deletes a different one. Coming back in either order, both end with 19 live entries and identical totals. It also covers a push whose reply is lost, a pull cut off between pages, and two phones merging the same pair in opposite directions.
+
+**Not covered by automated tests:** there are no screen tests, Google sign-in uses a fake verifier, and the parser tests start from text rather than from ML Kit. Screens were checked by hand during development:
+- **Web preview** with two browsers, the real API and MongoDB: joining by invite code, going offline, syncing, merging and exports.
+- **Android 16 emulator** in Expo Go: Hindi on every screen, App lock with fingerprint and PIN, a phone with no screen lock, and both exports reaching the share sheet.
+
 ## Design decisions
 
-- **The local database is the source of truth.** Screens read and write only SQLite. Each save writes the record and an outbox row in a single transaction, so a crash can never leave a gift saved but unqueued.
-- **Money is stored as integer whole rupees.** All totals go through `sumAmounts`. Display uses Indian digit grouping (₹3,77,500).
-- **Ids are UUIDs made on the phone**, so two relatives logging offline at the same wedding never collide. The family id is also made on the phone, so `POST /families` can register the same id.
+**Data**
+- **The local database is the source of truth.** Each save writes the record and an outbox row in a single transaction, so a crash can never leave a gift saved but unqueued.
+- **Money is stored as integer whole rupees.** All totals go through `sumAmounts`. Display uses Indian digit grouping (₹3,77,500). The largest single gift is ₹99,99,999, which guards against typos.
+- **Ids are UUIDs made on the phone,** so two relatives logging offline at the same wedding never collide. The family id is also made on the phone, so `POST /families` can register the same id.
 - **Live queries come from `useDbQuery`.** Drizzle's `useLiveQuery` only watches a query's main table, so an event total wouldn't refresh when an entry was added. `useDbQuery` re-runs a query when any table it lists changes.
-- **Typing a name without picking a suggestion** reuses the person when exactly one exact match exists, and asks you to pick when there are several. This keeps duplicates down; the rest show up as duplicate suggestions.
-- **The match key lives in `packages/shared`**, so the phone's search and duplicate suggestions and the server's stored keys always agree. Merges are only ever suggested, never automatic.
-- **A merge is an edit, not a delete.** The merged person stays with `mergedInto`, and the server treats it like a delete: it sticks, and anything that arrives late for that person goes to the one kept.
+- **A merge is an edit, not a delete.** The merged person stays with `mergedInto`, every change is queued, and the merge syncs like any edit.
 - **Language and app lock belong to the phone first.** Both live in `app_settings`, so they work offline and outlast sign-out. The language is also saved on the account so the family's other phones follow; the lock is per phone.
-- **Card reading and exports stay on the phone.** ML Kit reads the photo on the device, and the photo isn't kept. PDFs and spreadsheets are made from the local database. Nothing leaves the phone except through the share sheet.
-- **Name matching uses a custom transliterator, not a Sanskrit library.** Sanskrit schemes keep every inherent vowel (कमला → kamalā), which never matches how Hindi names are typed. The custom transliterator applies Hindi schwa deletion instead.
-- **Two typefaces, each with one job:**
-  - **Rozha One** (the wordmark) marks identity: the sign-in title, the श mark, the ledger name and the tab titles.
-  - **Mukta** covers everything else, in Latin and Devanagari.
-  - **Small-caps labels** use the theme's `eyebrow` text style.
+- **Card reading and exports stay on the phone.** Nothing leaves the phone except through the share sheet.
+
+**Names**
+- **The match key lives in `packages/shared`,** so the phone's search and duplicate suggestions and the server's stored keys always agree.
+- **It removes honorifics and folds spelling variants:** Shri, Smt, ji, Dr, श्री, जी and डॉ go, and aa→a, ee→i, oo→u, w→v, ph→f, x→ks, doubled letters, word-final ey→e and trailing a fold together.
+- **It uses a custom transliterator, not a Sanskrit library.** Sanskrit schemes keep every inherent vowel (कमला → kamalā), which never matches how Hindi names are typed. The custom transliterator applies Hindi schwa deletion instead (कमला → kamlaa).
+
+**Look and feel**
+- **Two typefaces, each with one job:** Rozha One marks identity (the sign-in title, the श mark, the ledger name and the tab titles), and Mukta covers everything else in Latin and Devanagari. Small-caps labels use the theme's `eyebrow` style, and in Devanagari they drop the letter spacing, which breaks the line along the top of the words.
 - **Colour is for attention, not decoration.** Sindoor and marigold come from the UI kit. The sync status stays quiet when everything is saved and turns marigold only while changes wait on the phone. Direction is never shown by colour alone: received is blue with ↙, given is orange with ↗.
-- **Animations only move opacity and transforms on the native driver**, so typing is never delayed, and Reduce motion skips them.
+- **The sign-in opening** takes about 1.7 s: the toran thread draws, marigolds drop and sway, the श mark pops, a ₹ shagun coin lands, and शगुन रजिस्टर is inked in.
+- **Animations only move opacity and transforms on the native driver,** so typing is never delayed, and Reduce motion skips them. The opening needs no new native libraries.
 - **Forms avoid the keyboard with `behavior="padding"` on Android too.** With Android's edge-to-edge layout the window doesn't resize for the keyboard, so leaving `behavior` unset let it cover the field being typed in and the buttons below it.
 
-## Next
+## History
 
-Still open from week 6:
+| Stage | What it added | Commit |
+|---|---|---|
+| Week 1 | Offline app foundation: setup, events, Quick Entry, event detail, people, outbox | `20b749d` |
+| Week 2 | Hindi/English name matching, fuzzy search, contacts, person history, cash count | `b292b0e` |
+| Week 3 | API, Google sign-in, shared ledgers, invite codes, roles | `c028a26` |
+| Week 4 | Sync between phones | `b96afcc` |
+| Design pass | Sign-in animation, branded headers, web preview database fix | `85aa09e`, `a3bf0f5`, `6fbde0a` |
+| Week 5 | Duplicate merge, invite-card scanning, PDF and Excel exports | `7e9c61b` |
+| Week 6 | Hindi throughout, app lock | `eb25aaf` |
+| After week 6 | Demo accounts, Android keyboard and PDF export fixes | `549d1c3` |
 
-1. **Try it on a real phone and a development build:** the Android checks ran on an emulator in Expo Go, so a real fingerprint sensor, face unlock and a development build are still untried.
-2. **Recent-apps preview:** with App lock on, Android's recent-apps screen still shows the last screen. Hiding it (`FLAG_SECURE`) would also block screenshots, so it's left as a choice.
+Each week's acceptance checks are written out in full in the [week-by-week README](https://github.com/ChinmayDubey231/shagun-register/blob/549d1c38385c530f495a38fbb9bc72cb9b292775/README.md).
+
+## Still open
+
+1. **First run on a development build and a real phone.** Google sign-in and ML Kit card reading can't run in the web preview or Expo Go, and a real fingerprint sensor and face unlock haven't been tried either.
+2. **EAS setup.** `eas.json` and `expo-dev-client` aren't in the repo yet, so a cloud development build needs the [steps above](#development-build) first.
+3. **Recent-apps preview.** With App lock on, Android's recent-apps screen still shows the last screen. Hiding it (`FLAG_SECURE`) would also block screenshots, so it's left as a choice.
+4. **Web preview actions.** Sign out, the entry long-press menu and member actions use `Alert.alert`, which does nothing on the web. The web preview is a development tool, so this only affects testing.
