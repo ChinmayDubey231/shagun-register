@@ -22,6 +22,7 @@ import {
   mergePeople,
   applyServerFamilies,
   createPerson,
+  forgetAccount,
   listLocalFamilies,
   markFamilyRegistered,
   unregisteredFamilies,
@@ -395,6 +396,30 @@ describe('Week 3: accounts on this phone', () => {
     expect(unregisteredFamilies(fresh, 'user-chinmay').map((f) => f.id)).toEqual([before.id]);
     markFamilyRegistered(fresh, before.id, 1);
     expect(unregisteredFamilies(fresh, 'user-chinmay')).toEqual([]);
+  });
+
+  it('forgets everything of a deleted account, and nothing of another account on the same phone', () => {
+    const fresh = freshDb();
+    const theirs = createLocalFamily(fresh, 'Dubey parivaar', randomUUID, 'user-deleted');
+    const neverSent = createLocalFamily(fresh, 'Not on the server', randomUUID, 'user-deleted');
+    markFamilyRegistered(fresh, theirs.id, 1);
+    const others = createLocalFamily(fresh, 'Sharma parivaar', randomUUID, 'user-other');
+    const context = (familyId: string, userId: string): LedgerContext => ({ db: fresh, familyId, deviceId: 'd1', userId, role: 'owner', newId: randomUUID, now: () => 1_000 });
+    for (const [familyId, userId] of [[theirs.id, 'user-deleted'], [neverSent.id, 'user-deleted'], [others.id, 'user-other']] as const) {
+      createPerson(context(familyId, userId), { displayName: 'Ramesh Sharma', relation: null, city: null });
+    }
+    const kept = countPendingChanges(fresh);
+    expect(kept).toBe(3);
+
+    forgetAccount(fresh, 'user-deleted');
+
+    expect(listLocalFamilies(fresh, 'user-deleted')).toEqual([]);
+    expect(fresh.select().from(schema.people).all().map((p) => p.familyId)).toEqual([others.id]);
+    expect(countPendingChanges(fresh)).toBe(1);
+    expect(listLocalFamilies(fresh, 'user-other').map((f) => f.name)).toEqual(['Sharma parivaar']);
+
+    // Nothing to forget: harmless.
+    forgetAccount(fresh, 'user-deleted');
   });
 
   it('adds a joined ledger, follows server role changes, and forgets ledgers the account was removed from', () => {

@@ -5,6 +5,7 @@ import {
   changeRoleSchema,
   createFamilySchema,
   createInviteSchema,
+  handOverSchema,
   INVITE_ALPHABET,
   INVITE_CODE_LENGTH,
   INVITE_TTL_HOURS,
@@ -104,7 +105,7 @@ export function familyRoutes(opts: { accessSecret: string; rateLimits: boolean }
     res.json(body);
   });
 
-  /** Soft delete. Members lose access at once; the data is purged after 30 days (purge job: week 6). */
+  /** Soft delete. Members lose access at once; the data is purged after 30 days (see deletion.ts). */
   r.delete('/families/:id', auth, requireRole('owner'), async (req, res) => {
     await Family.updateOne({ _id: req.params.id }, { deletedAt: new Date() });
     await Invite.deleteMany({ familyId: req.params.id });
@@ -157,6 +158,33 @@ export function familyRoutes(opts: { accessSecret: string; rateLimits: boolean }
       target.role = req.body.role;
       await target.save();
       res.json({ userId: req.params.userId, role: target.role });
+    },
+  );
+
+  /** Hands the ledger to another member. The old owner stays on as an editor and can then leave. */
+  r.post(
+    '/families/:id/owner',
+    auth,
+    requireRole('owner', 'Only the owner can hand over the ledger'),
+    validateBody(handOverSchema),
+    async (req, res) => {
+      const familyId = String(req.params.id);
+      const { userId } = req.body as { userId: string };
+      if (userId === req.userId) throw new AppError(400, 'VALIDATION', 'You already own this ledger');
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          // Checked again in here: two hand-overs at once must not leave two owners.
+          const family = await Family.findOneAndUpdate({ _id: familyId, ownerId: req.userId }, { ownerId: userId }, { session });
+          if (!family) throw forbidden('Only the owner can hand over the ledger');
+          const target = await Membership.findOneAndUpdate({ familyId, userId }, { role: 'owner' }, { session });
+          if (!target) throw notFound('Member not found');
+          await Membership.updateOne({ familyId, userId: req.userId }, { role: 'editor' }, { session });
+        });
+      } finally {
+        await session.endSession();
+      }
+      res.json({ ownerId: userId });
     },
   );
 

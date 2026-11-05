@@ -92,6 +92,13 @@ function App() {
             <Stack.Screen name="family/index" />
             <Stack.Screen name="family/switch" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="family/add" />
+            <Stack.Screen name="family/rename" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="family/hand-over" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="family/delete" options={{ animation: 'slide_from_bottom' }} />
+          </Stack.Protected>
+          {/* Reachable with no ledger too, so nobody needs one in order to delete their account. */}
+          <Stack.Protected guard={signedIn}>
+            <Stack.Screen name="account/delete" options={{ animation: 'slide_from_bottom' }} />
           </Stack.Protected>
           <Stack.Protected guard={signedIn && family === null}>
             <Stack.Screen name="setup" />

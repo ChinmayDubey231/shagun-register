@@ -102,6 +102,25 @@ Hosted by: Pandey Parivaar`);
     expect(draftTitle(draft, t)).toBe('Griha pravesh · Pandey parivaar');
   });
 
+  it('the host is the surname before "and family", however it is joined', () => {
+    const host = (text: string) => card(text).hostName;
+    expect(host('Shri Mahesh Gupta and family request your')).toBe('Gupta family');
+    expect(host('SHRI MAHESH GUPTA AND FAMILY')).toBe('GUPTA family');
+    expect(host('श्री महेश गुप्ता एवं परिवार आपको सादर आमंत्रित करते')).toBe('गुप्ता परिवार');
+    expect(host('श्री महेश गुप्ता व परिवार')).toBe('गुप्ता परिवार');
+    expect(host('श्री महेश गुप्ता और परिवार')).toBe('गुप्ता परिवार');
+  });
+
+  it('"and family" wrapped onto its own line takes the surname from the line above', () => {
+    expect(card('Shri Mahesh Gupta\nand family').hostName).toBe('Gupta family');
+    expect(card('श्री महेश गुप्ता\nएवं परिवार').hostName).toBe('गुप्ता परिवार');
+  });
+
+  it('"and family" with no name to take is no host at all', () => {
+    expect(card('and family').hostName).toBeNull();
+    expect(card('एवं परिवार').hostName).toBeNull();
+  });
+
   it('a birthday card without a year takes the next time that date comes round', () => {
     const text = `
 Join us for

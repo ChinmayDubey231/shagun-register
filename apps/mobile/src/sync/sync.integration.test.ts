@@ -22,6 +22,7 @@ import {
   addEntry,
   addJoinedFamily,
   applyServerFamilies,
+  countPendingChanges,
   createEvent,
   createLocalFamily,
   deleteEntry,
@@ -391,6 +392,67 @@ describe('Week 5: a merge reaches every phone', () => {
       expect(people(p, familyId), p.name).toEqual([['Ramesh Sharma', 3200]]);
       expect(countRejected(p.db)).toBe(0);
     }
+  });
+});
+
+describe('Changing a shared ledger', () => {
+  const bearer = (p: Phone) => ({ Authorization: `Bearer ${p.auth.accessToken}` });
+  /** What the app's account sync does: ask the server, then bring this phone in line. */
+  async function accountSync(p: Phone) {
+    const me = await request(app).get('/me').set(bearer(p));
+    expect(me.status).toBe(200);
+    applyServerFamilies(p.db, p.auth.user.id, (me.body as MeResponse).families, ++clock);
+    return listLocalFamilies(p.db, p.auth.user.id);
+  }
+
+  it('a new name reaches the other phone', async () => {
+    const { a, b, familyId } = await twoPhonesOneLedger();
+    await request(app).patch(`/families/${familyId}`).set(bearer(a)).send({ name: 'Dubey ghar' }).expect(200);
+    expect((await accountSync(b))[0]!.name).toBe('Dubey ghar');
+    expect((await accountSync(a))[0]!.name).toBe('Dubey ghar');
+  });
+
+  it('after a hand-over each phone has its new role, and gifts keep syncing both ways', async () => {
+    const { a, b, familyId, eventId } = await twoPhonesOneLedger();
+    await request(app).post(`/families/${familyId}/owner`).set(bearer(a)).send({ userId: b.auth.user.id }).expect(200);
+
+    expect((await accountSync(a))[0]!.role).toBe('editor');
+    expect((await accountSync(b))[0]!.role).toBe('owner');
+
+    a.use(familyId, 'editor');
+    b.use(familyId, 'owner');
+    a.log(eventId, 'From the old owner', 1100);
+    b.log(eventId, 'From the new owner', 2100);
+    await a.sync();
+    await b.sync();
+    await a.sync();
+    expect(a.entries(eventId)).toHaveLength(2);
+    expect(b.entries(eventId)).toHaveLength(2);
+  });
+
+  it('a deleted ledger leaves the other phone, including gifts it had not sent yet', async () => {
+    const { a, b, familyId, eventId } = await twoPhonesOneLedger();
+    b.log(eventId, 'Logged but never sent', 500);
+
+    await request(app).delete(`/families/${familyId}`).set(bearer(a)).expect(204);
+
+    expect(await accountSync(b)).toEqual([]);
+    expect(b.entries(eventId)).toEqual([]);
+    expect(countPendingChanges(b.db)).toBe(0);
+  });
+
+  it('deleting an account signs its other phone out, and the family keeps the gifts', async () => {
+    const { a, b, familyId, eventId } = await twoPhonesOneLedger();
+    b.log(eventId, 'Logged by Neha', 2100);
+    await b.sync();
+
+    await request(app).delete('/me').set(bearer(b)).expect(204);
+
+    await request(app).post('/auth/refresh').send({ refreshToken: b.auth.refreshToken }).expect(401);
+    await a.sync();
+    expect(a.entries(eventId).map((e) => e.personName)).toEqual(['Logged by Neha']);
+    const { body } = await request(app).get(`/families/${familyId}`).set(bearer(a)).expect(200);
+    expect(body.members.map((m: { name: string }) => m.name)).toEqual(['Chinmay']);
   });
 });
 

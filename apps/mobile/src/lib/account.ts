@@ -4,6 +4,7 @@ import {
   addJoinedFamily,
   applyServerFamilies,
   createLocalFamily,
+  forgetAccount,
   markFamilyRegistered,
   setCurrentFamily,
   unregisteredFamilies,
@@ -11,7 +12,7 @@ import {
 import { newId, reloadLedgers, useSession } from '@/store/session';
 import { api, ApiError, clearAuth, restoreAuth, saveAuth, setSignedOutHandler } from './api';
 import { restoreAppLock } from './appLock';
-import { getGoogleIdToken, googleSignOut } from './googleSignIn';
+import { getGoogleIdToken, googleRevokeAccess, googleSignOut } from './googleSignIn';
 import { reconcileLanguage, restoreLanguage } from './language';
 
 /** Startup: restore the saved session (works offline), then refresh from the server in the background. */
@@ -118,4 +119,37 @@ export async function joinLedger(code: string): Promise<JoinResponse> {
 export function switchLedger(familyId: string) {
   setCurrentFamily(getDb(), familyId);
   reloadLedgers();
+}
+
+/** Waits out a sync already running, whose answer may predate a change just made on the server. */
+async function syncAccountAfterChange() {
+  await syncing;
+  await syncAccount();
+}
+
+/** Owner only. Needs a connection. */
+export async function renameLedger(familyId: string, name: string) {
+  await api(`/families/${familyId}`, { method: 'PATCH', body: { name } });
+  await syncAccountAfterChange();
+}
+
+/** Owner only. Needs a connection. The caller stays on as an editor. */
+export async function handOverLedger(familyId: string, userId: string) {
+  await api(`/families/${familyId}/owner`, { method: 'POST', body: { userId } });
+  await syncAccountAfterChange();
+}
+
+/** Owner only. Needs a connection. The account sync then removes the ledger and its records from this phone. */
+export async function deleteLedger(familyId: string) {
+  await api(`/families/${familyId}`, { method: 'DELETE' });
+  await syncAccountAfterChange();
+}
+
+/** Needs a connection. Nothing on the phone changes unless the server has deleted the account. */
+export async function deleteAccount() {
+  const user = useSession.getState().user;
+  await api('/me', { method: 'DELETE' });
+  if (user) forgetAccount(getDb(), user.id);
+  await googleRevokeAccess();
+  await signOut();
 }

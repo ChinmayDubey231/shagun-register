@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Segmented } from '@/components/Choice';
-import { Card, Divider, ListGroup, ScreenHeader } from '@/components/layout';
+import { Card, Divider, ListGroup, ListRow, ScreenHeader } from '@/components/layout';
 import { Avatar } from '@/components/ledger';
 import { apiErrorMessage } from '@/i18n';
 import { api, ApiError } from '@/lib/api';
@@ -261,6 +261,21 @@ export default function FamilyMembersScreen() {
         </Card>
 
         {detail && !isOwner ? <Button label={t('family.leave')} variant="danger" size="medium" onPress={leave} /> : null}
+
+        {detail && isOwner ? (
+          <View style={{ gap: space.sm }}>
+            <ListGroup>
+              <ListRow icon="edit-2" label={t('family.rename')} onPress={() => router.push('/family/rename')} />
+              <Divider />
+              <ListRow icon="user-check" label={t('family.handOver')} onPress={() => router.push('/family/hand-over')} />
+              <Divider />
+              <ListRow icon="trash-2" label={t('family.deleteLedger')} onPress={() => router.push('/family/delete')} danger />
+            </ListGroup>
+            <AppText variant="caption" color={colors.inkMuted} style={{ paddingHorizontal: space.sm }}>
+              {t('family.ownerHint')}
+            </AppText>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

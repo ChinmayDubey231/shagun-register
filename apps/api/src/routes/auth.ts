@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { DEMO_ACCOUNTS, devSignInSchema, googleSignInSchema, patchMeSchema, refreshSchema, type ApiUser, type FamilySummary, type MeResponse } from '@shagun/shared';
 import type { GoogleVerifier } from '../auth/google.js';
 import { issueTokens, revokeRefreshToken, rotateRefreshToken, signAccessToken } from '../auth/tokens.js';
+import { accountDeletionPreview, deleteAccount } from '../deletion.js';
 import { seedDemoLedgers } from '../demo.js';
 import { unauthenticated } from '../errors.js';
 import { limiter, requireAuth, validateBody } from '../middleware.js';
@@ -73,6 +74,15 @@ export function authRoutes(opts: {
     const user = await User.findByIdAndUpdate(req.userId, { $set: req.body }, { returnDocument: 'after', lean: true });
     if (!user) throw unauthenticated();
     res.json({ user: toApiUser(user as unknown as UserDoc) });
+  });
+
+  r.get('/me/deletion', auth, async (req, res) => {
+    res.json(await accountDeletionPreview(req.userId!));
+  });
+
+  r.delete('/me', auth, async (req, res) => {
+    await deleteAccount(req.userId!);
+    res.status(204).end();
   });
 
   return r;

@@ -10,7 +10,7 @@ React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript through
 
 [Features](#features) · [Run it](#run-it) · [Deploy](#deploy) · [How it works](#how-it-works) · [Testing](#testing) · [Design decisions](#design-decisions) · [History](#history) · [Still open](#still-open)
 
-**Status:** all six planned weeks are complete, and demo accounts were added after them. The app has been checked in the web preview and on an Android emulator in Expo Go. Neither can run Google sign-in or invite-card scanning, so those still need a first run on a development build ([details](#still-open)).
+**Status:** weeks 1–6 are complete, along with demo accounts, ledger controls, account deletion and the release setup. Google sign-in and a real phone are still untested ([details](#still-open)).
 
 ## Features
 
@@ -46,8 +46,13 @@ React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript through
 | See and export the ledger | ✓ | ✓ | ✓ |
 | Log, edit and merge | ✓ | ✓ | |
 | Invite, change roles, remove members | ✓ | | |
-| Rename or delete the ledger | ✓ | | |
+| Rename, hand over or delete the ledger | ✓ | | |
 | Leave the ledger | | ✓ | ✓ |
+
+- **Ledger controls** (More → *Family members*, owner only):
+  - **Rename:** other phones pick up the new name the next time the app opens.
+  - **Hand over:** the chosen member becomes the owner, and the old owner stays as an editor and can then leave.
+  - **Delete:** type the ledger's name to confirm. Every member loses it at once, and the server erases its copy after 30 days.
 
 ### Invite cards and exports
 
@@ -64,6 +69,11 @@ React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript through
   - Choose on More, or before sign-in from *हिंदी में देखें*. The choice is saved on the phone and on the account, so your other phones follow.
   - Dates follow the language (14 फ़र॰ 2026). Amounts keep Indian grouping in Latin digits.
 - **App lock** (More → *App lock*): asks for the phone's fingerprint, face or PIN when the app opens and after a minute or more away, so a quick trip to the camera doesn't relock it. It needs a screen lock on the phone. If that is removed later, the app opens rather than lock the family out of their own ledger.
+- **Delete account** (More, or the setup screen with no ledger): type your email to confirm.
+  - Your name, email and sign-in are erased from the server straight away, along with any ledger only you use.
+  - A ledger you own that others use must be handed over or deleted first, so nobody loses a family's record by surprise.
+  - Gifts you logged in other families' ledgers stay as their record, without your name or email.
+- **[Privacy policy](docs/privacy-policy.md):** linked from More.
 
 ## Run it
 
@@ -114,11 +124,12 @@ npm run mobile    # Expo dev server
 |---|---|---|---|
 | Ledger, events, gifts, people, sync, merge | ✓ | ✓ | ✓ |
 | Hindi | ✓ | ✓ | ✓ |
-| Developer sign-in and demo accounts | ✓ | ✓ | When enabled |
+| Developer sign-in and demo accounts | ✓ | ✓ | Debug builds only |
 | Google sign-in | | | ✓ |
 | Invite-card scanning | *Type it in instead* | *Type it in instead* | ✓ |
 | App lock | | ✓ | ✓ |
 | Contacts | | ✓ | ✓ |
+| Rename, hand over or delete a ledger; delete account | ✓ | ✓ | ✓ |
 | Sign out, entry long-press menu, member actions | | ✓ | ✓ |
 | PDF register | Opens for printing | Share sheet | Share sheet |
 | Excel | Downloads | Share sheet | Share sheet |
@@ -147,15 +158,9 @@ With `EXPO_PUBLIC_DEV_LOGIN=1` in the app and `DEV_LOGIN=true` on the API, the *
 
 Google sign-in and card scanning are native modules, so they need a development build rather than Expo Go. Run these from `apps/mobile`:
 
+- **In the cloud with EAS** (recommended on Windows): `npx eas-cli@latest build --profile development --platform android`. The first time, follow [docs/RELEASE.md](docs/RELEASE.md).
 - **Local:** `npx expo run:android`
-  - **On Windows, keep the repo in a short folder** such as `C:\dev\shagun-register`. From a 73-character path, the build stops with `ninja: error: mkdir(...)`: CMake repeats the repo path inside its build folders, which goes past Windows' 260-character limit.
-- **In the cloud with EAS,** which isn't affected by the path limit. The repo has no `eas.json` and doesn't include `expo-dev-client`, so add them first:
-
-  ```bash
-  npx expo install expo-dev-client
-  npx eas-cli@latest build:configure
-  npx eas-cli@latest build --profile development --platform android
-  ```
+  - **On Windows, this also needs two short paths,** because the native build's paths otherwise pass the 260-character limit. See [Building on this computer](docs/RELEASE.md#building-on-this-computer-instead).
 
 The bundled ML Kit models add about 4 MB per script per CPU architecture.
 
@@ -191,10 +196,12 @@ The bundled ML Kit models add about 4 MB per script per CPU architecture.
 |---|---|
 | `EXPO_PUBLIC_API_URL` | Where the API runs |
 | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | The **web** OAuth client ID. Turns on Google sign-in in native builds |
-| `EXPO_PUBLIC_DEV_LOGIN` | `1` shows *Developer sign-in*. Never set it in release builds |
+| `EXPO_PUBLIC_DEV_LOGIN` | `1` shows *Developer sign-in*. Release builds ignore it |
 | `GOOGLE_IOS_URL_SCHEME` | iOS only: the reversed iOS client ID |
 
 ## Deploy
+
+For building the app and publishing it on Google Play, including the first test on a real phone, see **[docs/RELEASE.md](docs/RELEASE.md)**.
 
 ### Google sign-in setup (once)
 
@@ -234,7 +241,7 @@ Screens only ever read and write SQLite. The sync engine moves changes between t
 ```
 apps/
   mobile/                 Expo app (npm workspace @shagun/mobile)
-    src/app/              Screens: sign-in, setup, scan-invite, (tabs)/ Home · Events · People · More, events/, people/, family/
+    src/app/              Screens: sign-in, setup, scan-invite, (tabs)/ Home · Events · People · More, events/, people/, family/, account/
     src/components/       SignInIntro (opening animation), LockScreen, SyncDriver, layout (TabHeading, cards), ledger (SyncStatus, SyncPill, entry rows)
     src/db/               Drizzle schema, write path and queries (ledger.ts), useDbQuery hook
     src/sync/             Sync engine (push/pull, no Expo imports) and the two-phone integration test
@@ -247,14 +254,17 @@ apps/
     drizzle/              Generated SQL migrations
     modules/invite-text/  Local Expo module (Android): ML Kit text recognition, Latin + Devanagari
     metro.config.js       .sql imports, wasm assets, and the web preview's cross-origin isolation headers
+    eas.json              Build profiles: development, preview, production
   api/                    Express API (npm workspace @shagun/api)
     src/routes/           auth.ts (Google, dev sign-in, refresh, /me), families.ts (families, invites, members), sync.ts
     src/sync.ts           Push/pull, sequence numbers, conflict rules, entry history
+    src/deletion.ts       Account deletion, and erasing deleted ledgers after 30 days
     src/demo.ts           Sample ledgers for the demo accounts
     test/                 supertest + mongodb-memory-server (real replica set)
 packages/
   shared/                 zod schemas, API contract, match key, duplicate suggestions, rupee formatting, demo account list
-docs/                     App icon
+docs/                     Privacy policy, release guide, app icon
+.github/workflows/        Typecheck and tests on every pull request
 render.yaml               Render Blueprint for the API
 ```
 
@@ -292,6 +302,7 @@ Every save writes the record and an outbox row in one SQLite transaction. Sync t
 - **On the phone:** tokens are kept in the Android Keystore via expo-secure-store, and being signed in works offline. Ledgers are per account, so another account signing in on the same phone doesn't see them.
 - **Access:** one middleware enforces the role table. Non-members get 404, not 403, so family ids can't be probed. The phone's write path also refuses viewers.
 - **Invite codes** have no look-alike characters (0/O/1/I/L).
+- **Deleted data:** a deleted ledger stays on the server for 30 days in case of a mistake, then a job that runs daily and at every server start erases it for good. Deleting an account erases the ledgers only it used straight away.
 - **Rate limits:** sign-in and refresh allow 30 attempts per 15 minutes, and invite codes allow 10 per 15 minutes per user.
 - **Logs and errors:** request logs never include bodies, which carry names and amounts. Every error has the shape `{ error: { code, message } }`.
 
@@ -304,9 +315,12 @@ Every save writes the record and an outbox row in one SQLite transaction. Sync t
 | `POST /auth/dev` | Anyone, only with `DEV_LOGIN` | Email-only sign-in, which also seeds the demo ledgers for a demo account |
 | `POST /auth/refresh`, `POST /auth/logout` | Holder of a refresh token | Replace or revoke it |
 | `GET /me`, `PATCH /me` | Signed in | The account and its ledgers; change name or language |
+| `GET /me/deletion` | Signed in | What deleting the account would do to each ledger |
+| `DELETE /me` | Signed in | Delete the account. Refused while it owns a ledger others use |
 | `POST /families` | Signed in | Register a ledger. Idempotent: the phone sends the id it made offline |
 | `GET /families/:id` | Viewer and up | Ledger details and members |
 | `PATCH /families/:id`, `DELETE /families/:id` | Owner | Rename or delete |
+| `POST /families/:id/owner` | Owner | Hand over to another member |
 | `POST /families/:id/invites`, `GET …/invites`, `DELETE …/invites/:code` | Owner | Create, list or cancel invites |
 | `POST /invites/:code/accept` | Signed in | Join. Joining again never changes a role |
 | `PATCH /families/:id/members/:userId` | Owner | Change a role |
@@ -322,13 +336,14 @@ npm test            # all workspaces
 npm run typecheck
 ```
 
-The tests start their own in-memory MongoDB replica set, so they never touch the database in `.env`. The MongoDB binary downloads the first time.
+The tests start their own in-memory MongoDB replica set, so they never touch the database in `.env`. The MongoDB binary downloads the first time. GitHub Actions runs the same checks on every pull request and every push to `main`.
 
 | Tests | Cover |
 |---|---|
 | `packages/shared/src/*.test.ts` | Match key and transliteration, duplicate suggestions, rupee formatting, the amount keypad, schemas |
 | `apps/api/test/accounts.test.ts` | Sign-in, token rotation, rate limits, roles, invites, refusing `DEV_LOGIN` in production |
 | `apps/api/test/sync.test.ts` | Sequence order and paging, conflict rules, safe retries, concurrent pushes, merges |
+| `apps/api/test/deletion.test.ts` | Hand-over, the 30-day purge, what account deletion erases and what it refuses |
 | `apps/api/test/demo.test.ts` | Seeding once, roles, nothing added without `DEV_LOGIN` |
 | `apps/api/test/app.test.ts` | Health, error shape, CORS |
 | `apps/mobile/src/db/ledger.test.ts` | The write path on real SQLite: atomic saves, names, cash, merges, accounts, language and lock settings |
@@ -378,12 +393,13 @@ The integration test covers the main promise of the app. Both phones go offline 
 | Week 5 | Duplicate merge, invite-card scanning, PDF and Excel exports | `7e9c61b` |
 | Week 6 | Hindi throughout, app lock | `eb25aaf` |
 | After week 6 | Demo accounts, Android keyboard and PDF export fixes | `549d1c3` |
+| Release readiness | Rename, hand over and delete ledgers; 30-day purge; account deletion; privacy policy; EAS build profiles; CI | |
 
 Each week's acceptance checks are written out in full in the [week-by-week README](https://github.com/ChinmayDubey231/shagun-register/blob/549d1c38385c530f495a38fbb9bc72cb9b292775/README.md).
 
 ## Still open
 
-1. **First run on a development build and a real phone.** Google sign-in and ML Kit card reading can't run in the web preview or Expo Go, and a real fingerprint sensor and face unlock haven't been tried either.
-2. **EAS setup.** `eas.json` and `expo-dev-client` aren't in the repo yet, so a cloud development build needs the [steps above](#development-build) first.
+1. **First run on a real phone.** Google sign-in has never run, because it needs your Google Cloud setup. A development build on an Android 16 emulator has run the ledger controls, account deletion, App lock with a simulated fingerprint and the PIN, and card scanning from gallery images. A real camera, fingerprint sensor and face unlock haven't been tried.
+2. **First EAS build.** `eas.json` and `expo-dev-client` are in place, but no cloud build has run yet, because it needs your Expo account. Follow [docs/RELEASE.md](docs/RELEASE.md).
 3. **Recent-apps preview.** With App lock on, Android's recent-apps screen still shows the last screen. Hiding it (`FLAG_SECURE`) would also block screenshots, so it's left as a choice.
 4. **Web preview actions.** Sign out, the entry long-press menu and member actions use `Alert.alert`, which does nothing on the web. The web preview is a development tool, so this only affects testing.

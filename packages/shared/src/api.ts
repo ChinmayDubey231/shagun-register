@@ -46,6 +46,7 @@ export const createFamilySchema = z.object({
 export const renameFamilySchema = z.object({ name: z.string().trim().min(1).max(80) });
 export const createInviteSchema = z.object({ role: z.enum(['editor', 'viewer']) });
 export const changeRoleSchema = z.object({ role: z.enum(['editor', 'viewer']) });
+export const handOverSchema = z.object({ userId: z.string().min(1).max(100) });
 
 export interface ApiUser {
   id: string;
@@ -101,6 +102,16 @@ export interface JoinResponse {
   alreadyMember: boolean;
 }
 
+/** What deleting an account would do to each of its ledgers. */
+export interface AccountDeletionPreview {
+  /** Owned with nobody else in them: deleted with the account. */
+  deletes: FamilySummary[];
+  /** Owned and shared: must be handed over or deleted first, so nobody loses a family's record by surprise. */
+  blocks: FamilySummary[];
+  /** Someone else's ledgers: the account leaves them, and the family keeps the record. */
+  leaves: FamilySummary[];
+}
+
 /** Every API error has this shape; `code` is what the app translates. */
 export type ApiErrorCode =
   | 'NOT_FOUND'
@@ -112,6 +123,7 @@ export type ApiErrorCode =
   | 'INVITE_INVALID'
   | 'CONFLICT'
   | 'OWNER_CANNOT_LEAVE'
+  | 'OWNS_SHARED_LEDGER'
   | 'RATE_LIMITED'
   | 'INTERNAL';
 

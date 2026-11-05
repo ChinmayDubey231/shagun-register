@@ -152,6 +152,35 @@ export function Divider() {
   return <View style={styles.divider} />;
 }
 
+/** A tappable row for a ListGroup. Danger rows do something final, so they show no chevron. */
+export function ListRow({ icon, label, detail, onPress, danger }: {
+  icon: IconName;
+  label: string;
+  detail?: string;
+  onPress: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={detail ? `${label}, ${detail}` : label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.listRow, pressed && { backgroundColor: colors.ground }]}
+    >
+      <Feather name={icon} size={22} color={danger ? colors.danger : colors.inkMuted} />
+      <AppText variant="bodyStrong" color={danger ? colors.danger : colors.ink} style={{ flex: 1 }}>
+        {label}
+      </AppText>
+      {detail ? (
+        <AppText variant="meta" color={colors.inkMuted}>
+          {detail}
+        </AppText>
+      ) : null}
+      {danger ? null : <Feather name="chevron-right" size={18} color={colors.inkMuted} />}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   iconButton: {
     width: touch.min,
@@ -167,6 +196,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
   },
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 56, paddingHorizontal: space.lg },
   tabEyebrows: { flexDirection: 'row', justifyContent: 'space-between', gap: space.md },
   tabTitle: { fontFamily: fonts.wordmark, fontSize: 30, lineHeight: 38 },
   card: {

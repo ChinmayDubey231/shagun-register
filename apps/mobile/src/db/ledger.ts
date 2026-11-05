@@ -257,6 +257,14 @@ export function applyServerFamilies(db: LedgerDb, userId: string, server: Family
   });
 }
 
+/** After deleting an account: removes all its ledgers from this phone, including ones never sent to the server. */
+export function forgetAccount(db: LedgerDb, userId: string) {
+  db.transaction((tx) => {
+    const ids = tx.select({ id: syncMeta.familyId }).from(syncMeta).where(eq(syncMeta.userId, userId)).all().map((f) => f.id);
+    if (ids.length) forgetFamilies(tx, ids);
+  });
+}
+
 /** Deletes every local record of these ledgers, including changes still waiting to sync. */
 function forgetFamilies(tx: Writer, familyIds: string[]) {
   for (const table of [entries, events, people, cashCounts]) {

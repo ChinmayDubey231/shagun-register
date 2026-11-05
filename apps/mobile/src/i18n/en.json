@@ -359,7 +359,9 @@
     "signOut": "Sign out",
     "signOutConfirm": "Sign out on this phone? Your ledgers stay here and return when you sign in again.",
     "members": "Family members",
-    "switch": "Switch or add ledger"
+    "switch": "Switch or add ledger",
+    "privacy": "Privacy policy",
+    "deleteAccount": "Delete account"
   },
   "errors": {
     "amount": "Enter an amount",
@@ -455,7 +457,20 @@
     "offline": "You're offline. Members and invites need the internet; the ledger itself still works.",
     "notRegistered": "This ledger is saved on this phone but not on the server yet. Connect to the internet to invite family.",
     "retry": "Try again",
-    "viewerNote": "You can see this ledger but not change it. Ask the owner to make you an editor."
+    "viewerNote": "You can see this ledger but not change it. Ask the owner to make you an editor.",
+    "rename": "Rename ledger",
+    "renameHint": "Everyone in the ledger sees the new name the next time they open the app.",
+    "renameSave": "Save name",
+    "handOver": "Hand over this ledger",
+    "handOverBody": "The person you choose becomes the owner. You stay in the ledger as an editor, and can leave it after that.",
+    "handOverNoOne": "There's nobody else in this ledger yet. Invite someone first.",
+    "handOverTo": "Hand over to {{name}}",
+    "deleteLedger": "Delete this ledger",
+    "deleteBody": "{{name}} will disappear from every member's phone, with all its gifts, people and events. The server erases its copy after 30 days.",
+    "deleteExport": "If you might need the record, export it to Excel from More first.",
+    "deleteType": "Type the ledger's name to confirm",
+    "deleteConfirm": "Delete for everyone",
+    "ownerHint": "An owner can't leave a ledger. To leave, hand it over first."
   },
   "switcher": {
     "title": "Your ledgers",
@@ -472,6 +487,20 @@
     "OWNER_CANNOT_LEAVE": "The owner can't leave their own ledger.",
     "UNAUTHENTICATED": "Please sign in again.",
     "CONFLICT": "This ledger already exists on the server.",
-    "generic": "Something went wrong. Try again."
+    "generic": "Something went wrong. Try again.",
+    "OWNS_SHARED_LEDGER": "Hand over or delete the ledgers you share with others first."
+  },
+  "account": {
+    "deleteTitle": "Delete your account",
+    "deleteIntro": "This can't be undone. Your name, email and sign-in are erased from the server straight away, and everything for this account is removed from this phone.",
+    "blocksTitle": "Sort these out first",
+    "blocksBody": "You own these ledgers and other people use them. Hand each one over, or delete it.",
+    "deletesTitle": "Deleted with your account",
+    "leavesTitle": "You'll leave these",
+    "leavesBody": "The family keeps its record, including gifts you logged. Your name and email won't show in it.",
+    "otherPhones": "Any other phones you use will be signed out. Uninstall the app there to remove their copy.",
+    "typeEmail": "Type {{email}} to confirm",
+    "confirm": "Delete my account",
+    "done": "Your account has been deleted."
   }
 }

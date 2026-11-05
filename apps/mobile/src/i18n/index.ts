@@ -38,7 +38,7 @@ export default i18n;
 /** Maps an ApiError (or anything thrown by a network call) to a translated message. */
 export function apiErrorMessage(e: unknown): string {
   const code = (e as { code?: string } | null)?.code;
-  const known = ['NETWORK', 'NOT_CONFIGURED', 'INVITE_INVALID', 'RATE_LIMITED', 'ROLE_FORBIDDEN', 'OWNER_CANNOT_LEAVE', 'UNAUTHENTICATED', 'CONFLICT'] as const;
+  const known = ['NETWORK', 'NOT_CONFIGURED', 'INVITE_INVALID', 'RATE_LIMITED', 'ROLE_FORBIDDEN', 'OWNER_CANNOT_LEAVE', 'OWNS_SHARED_LEDGER', 'UNAUTHENTICATED', 'CONFLICT'] as const;
   const key = known.find((k) => k === code);
   return i18n.t(key ? `apiErrors.${key}` : 'apiErrors.generic');
 }
