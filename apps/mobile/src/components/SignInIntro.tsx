@@ -26,20 +26,23 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { useBoot } from "@/store/boot";
 import { colors } from "@/theme";
 
-type Mode = "pending" | "play" | "still";
-const IntroMode = createContext<Mode>("still");
+export type MotionMode = "pending" | "play" | "still";
+/** Whether the motion inside it plays, shows its end state at once (Reduce motion), or waits. */
+export const MotionMode = createContext<MotionMode>("still");
+const IntroMode = MotionMode;
 
-const native = Platform.OS !== "web";
-const SPRING = Easing.bezier(0.34, 1.56, 0.64, 1);
-const OUT = Easing.bezier(0.2, 0.7, 0.2, 1);
-const IN_OUT = Easing.bezier(0.65, 0, 0.35, 1);
-const COIN = Easing.bezier(0.3, 1.4, 0.5, 1);
+export const native = Platform.OS !== "web";
+export const SPRING = Easing.bezier(0.34, 1.56, 0.64, 1);
+export const OUT = Easing.bezier(0.2, 0.7, 0.2, 1);
+export const IN_OUT = Easing.bezier(0.65, 0, 0.35, 1);
+export const COIN = Easing.bezier(0.3, 1.4, 0.5, 1);
 
-/** Wrap the screen: decides once whether to play, honouring the system's Reduce motion. */
-export function IntroProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<Mode>("pending");
+/** 'play', or 'still' when the system's Reduce motion is on; 'pending' until known. */
+export function useMotionPreference(): MotionMode {
+  const [mode, setMode] = useState<MotionMode>("pending");
   useEffect(() => {
     let alive = true;
     AccessibilityInfo.isReduceMotionEnabled()
@@ -49,11 +52,25 @@ export function IntroProvider({ children }: { children: ReactNode }) {
       alive = false;
     };
   }, []);
-  return <IntroMode.Provider value={mode}>{children}</IntroMode.Provider>;
+  return mode;
+}
+
+/**
+ * Wrap the screen: decides once whether to play, honouring the system's Reduce motion.
+ * On a cold start it waits for the opening splash to start lifting, so it plays as it is revealed.
+ */
+export function IntroProvider({ children }: { children: ReactNode }) {
+  const preference = useMotionPreference();
+  const revealed = useBoot((s) => s.revealed);
+  return (
+    <IntroMode.Provider value={revealed ? preference : "pending"}>
+      {children}
+    </IntroMode.Provider>
+  );
 }
 
 /** A 0→1 value that runs once after `delay` ms (or jumps to 1 when motion is reduced). */
-function useProgress(
+export function useProgress(
   delay: number,
   duration: number,
   easing: (t: number) => number,
@@ -79,7 +96,7 @@ function useProgress(
   return value;
 }
 
-const clampOpacity = (v: Animated.Value, until = 1) =>
+export const clampOpacity = (v: Animated.Value, until = 1) =>
   v.interpolate({
     inputRange: [0, until],
     outputRange: [0, 1],
@@ -137,15 +154,23 @@ export function Enter({
   return <Animated.View style={[style, animated]}>{children}</Animated.View>;
 }
 
-/** Writes its child in from left to right, like ink in a register (a surface-coloured wipe). */
+/**
+ * Writes its child in from left to right, like ink in a register. A clip window slides right
+ * while the content inside slides back by the same amount, so the text stays still and is
+ * uncovered left to right over any background (no cover colour, native driver only).
+ */
 export function InkReveal({
   delay,
+  duration = 600,
+  align = "flex-start",
   children,
 }: {
   delay: number;
+  duration?: number;
+  align?: "flex-start" | "center";
   children: ReactNode;
 }) {
-  const v = useProgress(delay, 600, IN_OUT);
+  const v = useProgress(delay, duration, IN_OUT);
   const [width, setWidth] = useState(0);
   // The box hugs the text, and Android rounds that width down a fraction of a pixel, which
   // wraps the last word onto a clipped second line. Holding the box at the rounded-up width
@@ -154,29 +179,21 @@ export function InkReveal({
     const measured = e.nativeEvent.layout.width;
     setWidth((w) => (measured > w ? Math.ceil(measured) + 2 : w));
   };
+  const shift = (sign: number) =>
+    v.interpolate({ inputRange: [0, 1], outputRange: [sign * width, 0] });
   return (
     <View
-      style={{ alignSelf: "flex-start", overflow: "hidden", minWidth: width }}
+      style={{ alignSelf: align, minWidth: width, opacity: width ? 1 : 0 }}
       onLayout={onLayout}
     >
-      {children}
+      {/* The clip window is the part that moves. */}
       <Animated.View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: colors.surface, opacity: width ? 1 : 0 },
-          {
-            transform: [
-              {
-                translateX: v.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, width],
-                }),
-              },
-            ],
-          },
-        ]}
-      />
+        style={{ overflow: "hidden", transform: [{ translateX: shift(-1) }] }}
+      >
+        <Animated.View style={{ transform: [{ translateX: shift(1) }] }}>
+          {children}
+        </Animated.View>
+      </Animated.View>
     </View>
   );
 }
@@ -242,14 +259,25 @@ function Marigold({ index }: { index: number }) {
           },
         ]}
       >
-        <View style={styles.leaf} />
-        <View style={styles.flower}>
-          <View style={styles.flowerHeart} />
-        </View>
+        <Bead />
       </Animated.View>
     </Animated.View>
   );
 }
+
+/** One unit of the toran, 30×30: a hanging leaf and a marigold. */
+export function Bead() {
+  return (
+    <>
+      <View style={styles.leaf} />
+      <View style={styles.flower}>
+        <View style={styles.flowerHeart} />
+      </View>
+    </>
+  );
+}
+
+export const BEAD_SIZE = UNIT;
 
 /** The toran across the top: the thread draws, marigolds drop onto it, then sway. */
 export function Toran() {
