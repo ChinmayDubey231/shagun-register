@@ -1,19 +1,19 @@
 import { Feather } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import type { ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
-import { Alert, AppState, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Alert, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from '@/components/AppText';
 import { Segmented } from '@/components/Choice';
-import { Card, Divider, ListGroup, TabHeading } from '@/components/layout';
+import { Card, Divider, ListGroup, ListRow, TabHeading } from '@/components/layout';
 import { Avatar, SyncPill } from '@/components/ledger';
 import { getDb } from '@/db/client';
 import { countPendingChanges } from '@/db/ledger';
 import { canUseAppLock, setAppLockEnabled, useAppLock } from '@/lib/appLock';
 import { exportErrorMessage, shareLedgerWorkbook } from '@/lib/exports';
+import { PRIVACY_POLICY_URL } from '@/lib/links';
 import { chooseLanguage, LANGUAGE_NAMES } from '@/lib/language';
 import { syncNow, useSyncStatus } from '@/lib/sync';
 import { useSyncRefresh } from '@/lib/useSyncRefresh';
@@ -22,34 +22,6 @@ import { useDbQuery } from '@/db/useDbQuery';
 import { signOut } from '@/lib/account';
 import { useSession } from '@/store/session';
 import { colors, radius, space } from '@/theme';
-
-function Row({ icon, label, detail, onPress, danger }: {
-  icon: ComponentProps<typeof Feather>['name'];
-  label: string;
-  detail?: string;
-  onPress: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={detail ? `${label}, ${detail}` : label}
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.ground }]}
-    >
-      <Feather name={icon} size={22} color={danger ? colors.danger : colors.inkMuted} />
-      <AppText variant="bodyStrong" color={danger ? colors.danger : colors.ink} style={{ flex: 1 }}>
-        {label}
-      </AppText>
-      {detail ? (
-        <AppText variant="meta" color={colors.inkMuted}>
-          {detail}
-        </AppText>
-      ) : null}
-      {danger ? null : <Feather name="chevron-right" size={18} color={colors.inkMuted} />}
-    </Pressable>
-  );
-}
 
 function ago(at: number, t: ReturnType<typeof useTranslation>['t']) {
   const minutes = Math.floor((Date.now() - at) / 60_000);
@@ -176,14 +148,14 @@ export default function MoreScreen() {
         </Card>
 
         <ListGroup>
-          <Row icon="users" label={t('more.members')} onPress={() => router.push('/family')} />
+          <ListRow icon="users" label={t('more.members')} onPress={() => router.push('/family')} />
           <Divider />
-          <Row icon="repeat" label={t('more.switch')} detail={String(families.length)} onPress={() => router.push('/family/switch')} />
+          <ListRow icon="repeat" label={t('more.switch')} detail={String(families.length)} onPress={() => router.push('/family/switch')} />
         </ListGroup>
 
         <View style={{ gap: space.sm }}>
           <ListGroup>
-            <Row
+            <ListRow
               icon={exporting ? 'loader' : 'download'}
               label={t('export.excel')}
               detail={exporting ? t('export.working') : undefined}
@@ -255,7 +227,11 @@ export default function MoreScreen() {
           </View>
         </Card>
         <ListGroup>
-          <Row icon="log-out" label={t('more.signOut')} onPress={confirmSignOut} danger />
+          <ListRow icon="shield" label={t('more.privacy')} onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)} />
+          <Divider />
+          <ListRow icon="log-out" label={t('more.signOut')} onPress={confirmSignOut} danger />
+          <Divider />
+          <ListRow icon="trash-2" label={t('more.deleteAccount')} onPress={() => router.push('/account/delete')} danger />
         </ListGroup>
 
         <AppText variant="caption" color={colors.inkSubtle} align="center">

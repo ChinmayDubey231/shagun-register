@@ -46,6 +46,12 @@ export async function ensureSyncIndexes() {
   await db().collection(HISTORY).createIndex({ familyId: 1, entryId: 1, replacedAt: -1 });
 }
 
+/** Erases a family's ledger records for good, entry history included. */
+export async function eraseFamilyRecords(familyId: string) {
+  for (const table of SYNCED_TABLES) await coll(table).deleteMany({ familyId });
+  await db().collection(HISTORY).deleteMany({ familyId });
+}
+
 /** Stored document → wire record. */
 function toRecord(doc: Document): SyncRecord {
   const { _id, ...rest } = doc;

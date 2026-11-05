@@ -235,17 +235,23 @@ function findHonoree(lines: string[]): string[] {
   return [];
 }
 
-/** "The Verma Family", "समस्त वर्मा परिवार": the word before family / parivaar is the surname. */
-const FAMILY = /([\p{L}\p{M}]+)\s+(?:&\s+)?(family|parivar|parivaar|परिवार)(?![\p{L}\p{M}])/iu;
+const AND = '(?:&|and|एवं|व|और)';
+const FAMILY_WORD = '(?:family|parivar|parivaar|परिवार)';
+/** "The Verma Family", "समस्त वर्मा परिवार", "Shri Mahesh Gupta and family": the word before family / parivaar is the surname. */
+const FAMILY = new RegExp(`([\\p{L}\\p{M}]+)\\s+(?:${AND}\\s+)?(${FAMILY_WORD})(?![\\p{L}\\p{M}])`, 'iu');
+const STARTS_WITH_AND_FAMILY = new RegExp(`^\\s*${AND}\\s+${FAMILY_WORD}(?![\\p{L}\\p{M}])`, 'iu');
+const NOT_A_SURNAME = new RegExp(`^(?:समस्त|सकल|the|our|your|${AND})$`, 'iu');
 const HOST_LABEL = words([
   'निवेदक', 'विनीत', 'दर्शनाभिलाषी', 'स्वागतोत्सुक', 'स्वागतकर्ता', 'rsvp', 'best compliments from', 'with best compliments',
   'compliments from', 'hosted by', 'invited by', 'with love from',
 ]);
 
 function findHost(lines: string[]): string | null {
-  for (const line of lines) {
+  for (const [i, text] of lines.entries()) {
+    // A centred card can wrap "Shri Mahesh Gupta" / "and family" onto two lines.
+    const line = i > 0 && STARTS_WITH_AND_FAMILY.test(text) ? `${lines[i - 1]} ${text}` : text;
     const m = FAMILY.exec(line);
-    if (m && !NOT_NAMES.has(m[1]!.toLowerCase()) && !/^(?:समस्त|सकल|the|our|your)$/iu.test(m[1]!)) {
+    if (m && !NOT_NAMES.has(m[1]!.toLowerCase()) && !NOT_A_SURNAME.test(m[1]!)) {
       const surname = m[1]![0]!.toUpperCase() + m[1]!.slice(1);
       const word = /परिवार/.test(m[2]!) ? 'परिवार' : /parivaa?r/i.test(m[2]!) ? 'parivaar' : 'family';
       return `${surname} ${word}`;

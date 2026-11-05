@@ -61,6 +61,55 @@ describe('demo accounts', () => {
     expect(await Membership.exists({ familyId: family.id, userId: meena.user.id })).toBeNull();
   });
 
+  it('does not make a ledger again after it is renamed and handed over', async () => {
+    const asha = await demoSignIn(ASHA);
+    const rohan = await demoSignIn(ROHAN);
+    const family = (await me(asha)).families.find((f) => f.role === 'owner')!;
+    await request(app).patch(`/families/${family.id}`).set(bearer(asha)).send({ name: 'Renamed' }).expect(200);
+    await request(app).post(`/families/${family.id}/owner`).set(bearer(asha)).send({ userId: rohan.user.id }).expect(200);
+
+    await demoSignIn(ASHA);
+    await demoSignIn(MEENA);
+
+    expect(await Family.countDocuments()).toBe(2);
+  });
+
+  it('does not make a ledger again while a deleted one waits to be erased', async () => {
+    const asha = await demoSignIn(ASHA);
+    const rohan = await demoSignIn(ROHAN);
+    const family = (await me(asha)).families.find((f) => f.role === 'owner')!;
+    await request(app).delete(`/families/${family.id}`).set(bearer(asha)).expect(204);
+
+    await demoSignIn(ASHA);
+
+    expect((await me(rohan)).families.map((f) => f.name)).toEqual(['Yadav parivaar']);
+  });
+
+  it('does not make a ledger again when its old owner deletes their account after handing it over', async () => {
+    const asha = await demoSignIn(ASHA);
+    const rohan = await demoSignIn(ROHAN);
+    const family = (await me(asha)).families.find((f) => f.role === 'owner')!;
+    await request(app).post(`/families/${family.id}/owner`).set(bearer(asha)).send({ userId: rohan.user.id }).expect(200);
+    await request(app).delete('/me').set(bearer(asha)).expect(204);
+
+    await demoSignIn(ASHA);
+
+    expect(await Family.countDocuments()).toBe(2);
+    expect((await me(rohan)).families.map((f) => f.name).sort()).toEqual(['Sharma parivaar', 'Yadav parivaar']);
+  });
+
+  it('starts a sample afresh once its only owner has deleted the account and the ledger is erased', async () => {
+    const asha = await demoSignIn(ASHA);
+    const family = (await me(asha)).families.find((f) => f.role === 'owner')!;
+    await request(app).delete(`/families/${family.id}`).set(bearer(asha)).expect(204);
+    await request(app).delete('/me').set(bearer(asha)).expect(204);
+
+    const again = await demoSignIn(ASHA);
+
+    expect(again.user.id).not.toBe(asha.user.id);
+    expect((await me(again)).families.find((f) => f.role === 'owner')!.name).toBe('Sharma parivaar');
+  });
+
   it('survives two first sign-ins at the same moment', async () => {
     await Promise.all([demoSignIn(ASHA), demoSignIn(ROHAN), demoSignIn(MEENA)]);
     expect(await Family.countDocuments()).toBe(2);

@@ -280,12 +280,13 @@ async function seedLedger(ledger: DemoLedger, userIds: Map<string, string>) {
   await Family.create({ _id: familyId, name: ledger.name, ownerId });
   const { rejected } = await applyPush(familyId, ownerId, ledgerChanges(ledger, familyId, ownerId, Date.now()));
   if (rejected.length) throw new Error(`Demo ledger "${ledger.name}": ${rejected[0]!.message}`);
-  // Last: the owner's membership is what marks this ledger as finished.
+  // Last, so a seed cut short is made again: these are what mark this ledger as finished.
   await Membership.insertMany([
     { familyId, userId: ownerId, role: 'owner' },
     { familyId, userId: userIds.get(ledger.editor.email)!, role: 'editor' },
     { familyId, userId: userIds.get(ledger.viewer.email)!, role: 'viewer' },
   ]);
+  await Family.updateOne({ _id: familyId }, { demoKey: ledger.name });
 }
 
 let seeding: Promise<void> | null = null;
@@ -300,7 +301,10 @@ export function seedDemoLedgers(devUser: (email: string, name: string) => Promis
     const userIds = new Map<string, string>();
     for (const a of DEMO_ACCOUNTS) userIds.set(a.email, (await devUser(a.email, a.name)).id);
     for (const ledger of DEMO_LEDGERS) {
-      const done = await Membership.exists({ userId: userIds.get(ledger.owner.email), role: 'owner' });
+      // The key survives a rename or a hand-over. The membership check covers ledgers seeded before there was a key.
+      const done =
+        (await Family.exists({ demoKey: ledger.name })) ??
+        (await Membership.exists({ userId: userIds.get(ledger.owner.email), role: 'owner' }));
       if (!done) await seedLedger(ledger, userIds);
     }
   })().finally(() => {

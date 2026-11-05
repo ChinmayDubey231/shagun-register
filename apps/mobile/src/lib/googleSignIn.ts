@@ -3,8 +3,8 @@ import { ApiError } from './api';
 
 const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
 
-/** Dev-only email sign-in (the API must also have DEV_LOGIN=true). */
-export const DEV_LOGIN = process.env.EXPO_PUBLIC_DEV_LOGIN === '1' || process.env.EXPO_PUBLIC_DEV_LOGIN === 'true';
+/** Dev-only email sign-in (the API must also have DEV_LOGIN=true). Never in a release build, whatever .env says. */
+export const DEV_LOGIN = __DEV__ && (process.env.EXPO_PUBLIC_DEV_LOGIN === '1' || process.env.EXPO_PUBLIC_DEV_LOGIN === 'true');
 
 /** Google sign-in needs the native module, so it works in development and release builds, not Expo Go or web. */
 export const googleSignInAvailable = Platform.OS !== 'web' && WEB_CLIENT_ID.length > 0;
@@ -35,6 +35,17 @@ export async function getGoogleIdToken(): Promise<string | null> {
   if (!isSuccessResponse(res)) return null;
   if (!res.data.idToken) throw new ApiError('UNAUTHENTICATED', 'Google did not return an ID token. Check the web client ID.');
   return res.data.idToken;
+}
+
+/** After deleting an account: withdraws the access Google granted this app. Best effort. */
+export async function googleRevokeAccess(): Promise<void> {
+  if (!googleSignInAvailable) return;
+  try {
+    const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
+    await GoogleSignin.revokeAccess();
+  } catch {
+    // not signed in with Google, or module missing
+  }
 }
 
 /** Lets the next sign-in pick a different Google account. */

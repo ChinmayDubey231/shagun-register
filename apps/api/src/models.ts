@@ -29,6 +29,8 @@ const familySchema = new Schema(
     lastSeq: { type: Number, default: 0 },
     /** Set when the owner deletes the ledger; data is purged after the grace period. */
     deletedAt: { type: Date, default: null },
+    /** Which sample ledger this is, on a server running with DEV_LOGIN. It stops the sample being made twice. */
+    demoKey: { type: String },
   },
   { timestamps: true, versionKey: false },
 );
