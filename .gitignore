@@ -10,3 +10,6 @@ apps/mobile/android/
 apps/mobile/ios/
 coverage/
 *.log
+
+# CanvasKit for the web preview of Skia (npx setup-skia-web public in apps/mobile)
+apps/mobile/public/canvaskit.wasm

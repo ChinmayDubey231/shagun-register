@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import type { FamilyDetail, FamilyMember, InviteResponse } from '@shagun/shared';
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +19,12 @@ import { colors, fonts, radius, space } from '@/theme';
 
 type InviteRole = 'editor' | 'viewer';
 
+const roleTone = {
+  owner: { bg: colors.marigoldTint, fg: colors.marigoldInk },
+  editor: { bg: colors.sindoorTint, fg: colors.sindoor },
+  viewer: { bg: colors.ground, fg: colors.inkMuted },
+} as const;
+
 /** Members, roles and invite codes (design board 14). Needs the internet; the ledger itself doesn't. */
 export default function FamilyMembersScreen() {
   const { t } = useTranslation();
@@ -29,6 +35,7 @@ export default function FamilyMembersScreen() {
   const [invites, setInvites] = useState<InviteResponse[]>([]);
   const [inviteRole, setInviteRole] = useState<InviteRole>('editor');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [making, setMaking] = useState(false);
@@ -54,9 +61,18 @@ export default function FamilyMembersScreen() {
     }
   }, [family]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Also on coming back from a member's screen, so a changed role or a removal shows at once.
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  const pullToRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
 
   if (!family) return null;
 
@@ -85,36 +101,11 @@ export default function FamilyMembersScreen() {
     }
   };
 
-  const act = async (fn: () => Promise<unknown>) => {
-    setError(null);
-    try {
-      await fn();
-      await load();
-    } catch (e) {
-      setError(apiErrorMessage(e));
-    }
-  };
-
-  const memberActions = (m: FamilyMember) => {
-    if (!isOwner || m.role === 'owner') return;
-    const setRole = (role: InviteRole) =>
-      act(() => api(`/families/${family.id}/members/${m.userId}`, { method: 'PATCH', body: { role } }));
-    Alert.alert(m.name, m.email, [
-      { text: t('common.cancel'), style: 'cancel' },
-      m.role === 'viewer'
-        ? { text: t('family.makeEditor'), onPress: () => void setRole('editor') }
-        : { text: t('family.makeViewer'), onPress: () => void setRole('viewer') },
-      {
-        text: t('family.remove'),
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert(t('family.remove'), t('family.removeConfirm', { name: m.name }), [
-            { text: t('common.cancel'), style: 'cancel' },
-            { text: t('family.remove'), style: 'destructive', onPress: () => void act(() => api(`/families/${family.id}/members/${m.userId}`, { method: 'DELETE' })) },
-          ]),
-      },
-    ]);
-  };
+  const openMember = (m: FamilyMember) =>
+    router.push({
+      pathname: '/family/member/[userId]',
+      params: { userId: m.userId, name: m.name, email: m.email, role: m.role, joinedAt: String(m.joinedAt) },
+    });
 
   const leave = () =>
     Alert.alert(t('family.leave'), t('family.leaveConfirm', { name: family.name }), [
@@ -142,7 +133,7 @@ export default function FamilyMembersScreen() {
       <ScrollView
         style={{ backgroundColor: colors.ground }}
         contentContainerStyle={styles.body}
-        refreshControl={<RefreshControl refreshing={loading && !!detail} onRefresh={load} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void pullToRefresh()} />}
       >
         {offline ? (
           <Card style={styles.notice}>
@@ -212,6 +203,7 @@ export default function FamilyMembersScreen() {
               {detail.members.map((m, i) => {
                 const self = m.userId === me?.id;
                 const actionable = isOwner && m.role !== 'owner';
+                const tone = roleTone[m.role];
                 return (
                   <View key={m.userId}>
                     {i > 0 ? <Divider /> : null}
@@ -219,7 +211,7 @@ export default function FamilyMembersScreen() {
                       accessibilityRole={actionable ? 'button' : undefined}
                       accessibilityLabel={`${m.name}${self ? ` ${t('family.you')}` : ''}, ${roleLabel[m.role]}`}
                       disabled={!actionable}
-                      onPress={() => memberActions(m)}
+                      onPress={() => openMember(m)}
                       style={({ pressed }) => [styles.member, pressed && { backgroundColor: colors.ground }]}
                     >
                       <Avatar name={m.name} />
@@ -231,17 +223,25 @@ export default function FamilyMembersScreen() {
                           {m.email}
                         </AppText>
                       </View>
-                      <View style={styles.rolePill}>
-                        <AppText variant="tiny" style={{ fontSize: 13 }}>
+                      <View style={[styles.rolePill, { backgroundColor: tone.bg }]}>
+                        <AppText variant="tiny" color={tone.fg} style={{ fontSize: 13 }}>
                           {roleLabel[m.role]}
                         </AppText>
-                        {actionable ? <Feather name="chevron-down" size={16} color={colors.ink} /> : null}
+                      </View>
+                      {/* Same width either way, so every pill lines up. */}
+                      <View style={styles.chevron}>
+                        {actionable ? <Feather name="chevron-right" size={20} color={colors.inkMuted} /> : null}
                       </View>
                     </Pressable>
                   </View>
                 );
               })}
             </ListGroup>
+            {isOwner && detail.members.length > 1 ? (
+              <AppText variant="caption" color={colors.inkMuted} style={{ paddingHorizontal: space.sm }}>
+                {t('family.membersHint')}
+              </AppText>
+            ) : null}
           </View>
         ) : null}
 
@@ -307,14 +307,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   member: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: 14, paddingVertical: space.md, minHeight: 64 },
-  rolePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    height: 34,
-    paddingHorizontal: space.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.lineStrong,
-  },
+  rolePill: { height: 28, justifyContent: 'center', paddingHorizontal: 10, borderRadius: radius.pill },
+  chevron: { width: 20, marginLeft: -space.xs, alignItems: 'center' },
 });

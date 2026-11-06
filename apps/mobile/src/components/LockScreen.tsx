@@ -3,13 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { unlock } from '@/lib/appLock';
+import { useBoot } from '@/store/boot';
 import { colors, fonts, space } from '@/theme';
 import { AppText } from './AppText';
 import { Button } from './Button';
 
 /**
  * Covers the app while it is locked; the screens stay where they were underneath. Asks for
- * the phone's fingerprint, face or PIN as soon as it shows, and again from the button.
+ * the phone's fingerprint, face or PIN as soon as it shows (after the opening splash on a cold
+ * start), and again from the button.
  */
 export function LockScreen() {
   const { t } = useTranslation();
@@ -25,9 +27,11 @@ export function LockScreen() {
     else if (outcome === 'failed') setMessage(t('lock.failed'));
   }, [t]);
 
+  // On a cold start, ask only once the opening splash lifts, so the prompt isn't drawn over it.
+  const revealed = useBoot((s) => s.revealed);
   useEffect(() => {
-    void tryUnlock();
-  }, [tryUnlock]);
+    if (revealed) void tryUnlock();
+  }, [revealed, tryUnlock]);
 
   return (
     <View style={StyleSheet.absoluteFill}>
