@@ -105,6 +105,7 @@ function App({ onReady }: { onReady: () => void }) {
             <Stack.Screen name="family/switch" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="family/add" />
             <Stack.Screen name="family/rename" options={{ animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="family/member/[userId]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="family/hand-over" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="family/delete" options={{ animation: 'slide_from_bottom' }} />
           </Stack.Protected>

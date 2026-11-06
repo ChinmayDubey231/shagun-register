@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import type { FamilyDetail, FamilyMember } from '@shagun/shared';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -21,6 +21,8 @@ export default function HandOverLedgerScreen() {
   const router = useRouter();
   const family = useSession((s) => s.family);
   const familyId = family?.id;
+  // Coming from a member's screen preselects them; confirming is still its own step.
+  const { userId: preselect } = useLocalSearchParams<{ userId?: string }>();
   const [others, setOthers] = useState<FamilyMember[] | null>(null);
   const [chosen, setChosen] = useState<FamilyMember | null>(null);
   const [busy, setBusy] = useState(false);
@@ -29,10 +31,14 @@ export default function HandOverLedgerScreen() {
   useEffect(() => {
     if (!familyId) return;
     api<FamilyDetail>(`/families/${familyId}`).then(
-      (d) => setOthers(d.members.filter((m) => m.role !== 'owner')),
+      (d) => {
+        const list = d.members.filter((m) => m.role !== 'owner');
+        setOthers(list);
+        if (preselect) setChosen(list.find((m) => m.userId === preselect) ?? null);
+      },
       (e: unknown) => setError(apiErrorMessage(e)),
     );
-  }, [familyId]);
+  }, [familyId, preselect]);
 
   if (!family) return null;
 
