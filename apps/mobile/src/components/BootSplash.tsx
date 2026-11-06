@@ -17,8 +17,16 @@
  * With Reduce motion on, the open lifafa is shown still for 0.7 s and then fades.
  */
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from 'react-native';
 import { useBoot } from '@/store/boot';
 import { loadScene } from './splash/loadScene';
 import { SplashScene } from './splash/SplashScene';
@@ -53,12 +61,24 @@ const COIN_Y = 4 + COIN / 2 - COIN_RISE;
 const LIFT_AT = 2050;
 const STILL_FOR = 700;
 
-/** Where the lifafa sits: centred, a little above the middle. */
+/**
+ * The space the curtain covers, and where the lifafa sits in it: centred, a little above the
+ * middle. On Android useWindowDimensions leaves out the status and navigation bars while the app
+ * draws edge to edge, which left a strip at the bottom uncovered, so the curtain fills its parent
+ * and measures itself; the window size only stands in until that first layout.
+ */
 function useLayout() {
-  const { width, height } = useWindowDimensions();
+  const window = useWindowDimensions();
+  const [measured, setMeasured] = useState<{ width: number; height: number } | null>(null);
+  const width = measured?.width ?? window.width;
+  const height = measured?.height ?? window.height;
   const envLeft = (width - ENV_W) / 2;
   const envTop = Math.round(height / 2 - 72);
-  return { width, height, envLeft, envTop, wordTop: envTop + 180 };
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width: w, height: h } = e.nativeEvent.layout;
+    setMeasured((m) => (m && m.width === w && m.height === h ? m : { width: w, height: h }));
+  }, []);
+  return { width, height, envLeft, envTop, wordTop: envTop + 180, onLayout };
 }
 
 /** Pivot a scale around one edge: RN scales around the centre. */
@@ -239,7 +259,7 @@ function Wordmark({ top }: { top: number }) {
  * `appReady`: the screen underneath can be shown.
  */
 export function BootSplash({ fontsReady, appReady, onDone }: { fontsReady: boolean; appReady: boolean; onDone: () => void }) {
-  const { width, height, envLeft, envTop, wordTop } = useLayout();
+  const { width, height, envLeft, envTop, wordTop, onLayout: measure } = useLayout();
   const preference = useMotionPreference();
   const [sceneReady, setSceneReady] = useState(false);
   useEffect(() => {
@@ -256,7 +276,10 @@ export function BootSplash({ fontsReady, appReady, onDone }: { fontsReady: boole
   const lift = useRef(new Animated.Value(0)).current;
 
   // The native splash can go as soon as this (identical, plain marigold) view is on screen.
-  const onLayout = () => void SplashScreen.hideAsync().catch(() => {});
+  const onLayout = (e: LayoutChangeEvent) => {
+    measure(e);
+    void SplashScreen.hideAsync().catch(() => {});
+  };
 
   useEffect(() => {
     if (mode === 'pending') return;
@@ -291,7 +314,7 @@ export function BootSplash({ fontsReady, appReady, onDone }: { fontsReady: boole
       accessible
       accessibilityRole="image"
       accessibilityLabel="Shagun Register is opening"
-      style={[styles.curtain, { width, height }, curtain]}
+      style={[styles.curtain, curtain]}
     >
       <MotionMode.Provider value={mode}>
         {/* A toran hangs from the curtain's edge, seen as it lifts. */}
@@ -325,7 +348,7 @@ export function BootSplash({ fontsReady, appReady, onDone }: { fontsReady: boole
 }
 
 const styles = StyleSheet.create({
-  curtain: { position: 'absolute', left: 0, top: 0, backgroundColor: GROUND, zIndex: 100, elevation: 100 },
+  curtain: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: GROUND, zIndex: 100, elevation: 100 },
   garland: { position: 'absolute', left: 0, height: 36 },
   garlandThread: { position: 'absolute', left: 0, top: 0, height: 4, backgroundColor: MAROON },
   garlandBead: { position: 'absolute', top: 2, width: BEAD_SIZE, height: BEAD_SIZE },
