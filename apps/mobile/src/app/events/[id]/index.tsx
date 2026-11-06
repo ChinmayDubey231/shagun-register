@@ -18,6 +18,17 @@ import { useCanEdit, useLedgerContext, useSession } from '@/store/session';
 import { colors, radius, space } from '@/theme';
 import { useSyncRefresh } from '@/lib/useSyncRefresh';
 
+/**
+ * Up to three modes share one row. All four (cash, UPI, cheque, item) would leave each box
+ * too narrow for a five-digit total on a small phone, so they go two by two instead.
+ */
+function modeRows<T>(modes: readonly T[]): T[][] {
+  const perRow = modes.length > 3 ? 2 : modes.length;
+  const rows: T[][] = [];
+  for (let i = 0; i < modes.length; i += perRow) rows.push(modes.slice(i, i + perRow));
+  return rows;
+}
+
 export default function EventDetailScreen() {
   const refreshControl = useSyncRefresh();
   const { t } = useTranslation();
@@ -107,14 +118,19 @@ export default function EventDetailScreen() {
           </View>
           {modes.length > 0 ? (
             <View style={styles.modes}>
-              {modes.map((m) => (
-                <View key={m.mode} style={styles.modeBox}>
-                  <AppText variant="tiny" weight="regular" color={colors.onSindoorMuted}>
-                    {t('eventDetail.modeCount', { mode: t(`mode.${m.mode}`), count: m.count })}
-                  </AppText>
-                  <AppText variant="bodyStrong" weight="bold" color={colors.surface} tabular>
-                    {m.mode === 'item' && m.total === 0 ? t('eventDetail.items', { count: m.count }) : formatINR(m.total)}
-                  </AppText>
+              {modeRows(modes).map((row) => (
+                <View key={row.map((m) => m.mode).join()} style={styles.modeRow}>
+                  {row.map((m) => (
+                    <View key={m.mode} style={styles.modeBox}>
+                      <AppText variant="tiny" weight="regular" color={colors.onSindoorMuted} numberOfLines={1}>
+                        {t('eventDetail.modeCount', { mode: t(`mode.${m.mode}`), count: m.count })}
+                      </AppText>
+                      {/* One line always: a long amount shrinks a little rather than breaking. */}
+                      <AppText variant="bodyStrong" weight="bold" color={colors.surface} tabular numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                        {m.mode === 'item' && m.total === 0 ? t('eventDetail.items', { count: m.count }) : formatINR(m.total)}
+                      </AppText>
+                    </View>
+                  ))}
                 </View>
               ))}
             </View>
@@ -219,7 +235,8 @@ export default function EventDetailScreen() {
 const styles = StyleSheet.create({
   hero: { paddingHorizontal: space.xl, paddingBottom: space.lg, gap: 2 },
   totalRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: space.md },
-  modes: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+  modes: { gap: space.sm, marginTop: space.md },
+  modeRow: { flexDirection: 'row', gap: space.sm },
   modeBox: { flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: radius.input, paddingVertical: space.sm, paddingHorizontal: 10 },
   toolbar: { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.line, paddingTop: space.md, paddingHorizontal: space.xl, gap: space.sm },
   tabs: { gap: 4 },
