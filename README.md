@@ -8,9 +8,28 @@ A private family ledger for wedding and function gifts: log what you receive and
 
 React Native (Expo SDK 58) · Node.js + Express · MongoDB · TypeScript throughout.
 
-[Features](#features) · [Run it](#run-it) · [Deploy](#deploy) · [How it works](#how-it-works) · [Testing](#testing) · [Design decisions](#design-decisions) · [History](#history) · [Still open](#still-open)
+[See it work](#see-it-work) · [Features](#features) · [Run it](#run-it) · [Deploy](#deploy) · [How it works](#how-it-works) · [Testing](#testing) · [Design decisions](#design-decisions) · [History](#history) · [Still open](#still-open)
 
 **Status:** weeks 1–6 are complete, along with demo accounts, ledger controls, account deletion and the release setup. Google sign-in and a real phone are still untested ([details](#still-open)).
+
+## See it work
+
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="docs/demo/opening.gif" alt="Cold start: a marigold splash where a maroon shagun lifafa opens, a ₹ coin rises and Shagun Register is written in English and Hindi, then the sign-in screen draws its toran and features in" width="200"></td>
+    <td align="center" width="25%"><img src="docs/demo/log-a-gift.gif" alt="Priya's Wedding shows ₹31,503 received. Log a gift opens Quick Entry, typing kamla suggests कमला देवी, Relative and the ₹1,100 chip are tapped, and after Save the total reads ₹32,603 with her gift on top, pending sync" width="200"></td>
+    <td align="center" width="25%"><img src="docs/demo/people.gif" alt="On People, typing Shri ramesh finds both Ramesh Sharma and रमेश शर्मा. Ramesh Sharma's page shows they gave ₹7,200 over 2 exchanges, an upcoming wedding with what they gave last time, and the Received filter" width="200"></td>
+    <td align="center" width="25%"><img src="docs/demo/hindi.gif" alt="On More, choosing हिंदी switches the screen to Hindi at once, then Home and Events are shown in Hindi" width="200"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Opening</b><br><sub>Lifafa splash, then sign-in</sub></td>
+    <td align="center"><b>Log a gift</b><br><sub>"kamla" finds कमला देवी</sub></td>
+    <td align="center"><b>Find a family</b><br><sub>Both spellings, full history</sub></td>
+    <td align="center"><b>Hindi</b><br><sub>Every screen switches</sub></td>
+  </tr>
+</table>
+
+Recorded on an Android 16 emulator with the Asha Sharma [demo account](#demo-accounts).
 
 ## Features
 
@@ -263,7 +282,7 @@ apps/
     test/                 supertest + mongodb-memory-server (real replica set)
 packages/
   shared/                 zod schemas, API contract, match key, duplicate suggestions, rupee formatting, demo account list
-docs/                     Privacy policy, release guide, app icon
+docs/                     Privacy policy, release guide, app icon, demo GIFs
 .github/workflows/        Typecheck and tests on every pull request
 render.yaml               Render Blueprint for the API
 ```
