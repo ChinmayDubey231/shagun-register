@@ -155,6 +155,21 @@ export function Enter({
 }
 
 /**
+ * The width of a box that hugs a line of text, for an ink reveal's clip window. Android rounds
+ * the measured width down a fraction of a pixel, which wraps the last word onto a clipped second
+ * line, so the box is held at the rounded-up width; it only grows again if the text gets wider.
+ * Put `onLayout` on the box and give it `minWidth: width`.
+ */
+export function useInkWidth() {
+  const [width, setWidth] = useState(0);
+  const onLayout = (e: LayoutChangeEvent) => {
+    const measured = e.nativeEvent.layout.width;
+    setWidth((w) => (measured > w ? Math.ceil(measured) + 2 : w));
+  };
+  return [width, onLayout] as const;
+}
+
+/**
  * Writes its child in from left to right, like ink in a register. A clip window slides right
  * while the content inside slides back by the same amount, so the text stays still and is
  * uncovered left to right over any background (no cover colour, native driver only).
@@ -171,14 +186,7 @@ export function InkReveal({
   children: ReactNode;
 }) {
   const v = useProgress(delay, duration, IN_OUT);
-  const [width, setWidth] = useState(0);
-  // The box hugs the text, and Android rounds that width down a fraction of a pixel, which
-  // wraps the last word onto a clipped second line. Holding the box at the rounded-up width
-  // gives the text room; it only grows again if the text itself gets wider.
-  const onLayout = (e: LayoutChangeEvent) => {
-    const measured = e.nativeEvent.layout.width;
-    setWidth((w) => (measured > w ? Math.ceil(measured) + 2 : w));
-  };
+  const [width, onLayout] = useInkWidth();
   const shift = (sign: number) =>
     v.interpolate({ inputRange: [0, 1], outputRange: [sign * width, 0] });
   return (

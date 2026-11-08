@@ -1,16 +1,17 @@
 /**
  * The full-screen part of the opening splash, drawn with React Native Skia and driven by one
- * Reanimated clock on the UI thread. Two layers:
+ * Reanimated clock on the UI thread, the one the lifafa above it runs on (splash/clock.ts). Two layers:
  *   back:  sunrise glow spreading from the lifafa, turning light rays across the whole screen,
  *          a rangoli ring drawn around the lifafa, toran swags dropping in at the top, and a
  *          scalloped rangoli border drawn along the bottom;
  *   front: a shower of marigold petals and leaves over the whole screen, and twinkling sparkles.
  * Timings line up with BootSplash (t = 0 is when the splash starts playing).
  */
-import { BlurMask, Canvas, Circle, Group, Oval, Path, RadialGradient, Rect, Skia, useClock, vec } from '@shopify/react-native-skia';
+import { BlurMask, Canvas, Circle, Group, Oval, Path, RadialGradient, Rect, Skia, vec } from '@shopify/react-native-skia';
 import { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
+import { step } from './clock';
 
 export interface SplashSkiaProps {
   layer: 'back' | 'front';
@@ -22,26 +23,14 @@ export interface SplashSkiaProps {
   /** Where the coin ends up. */
   coinX: number;
   coinY: number;
-  /** Reduce motion: draw one finished frame and hold it. */
-  still: boolean;
+  /** The splash clock, in ms. With Reduce motion on it is held at one finished frame. */
+  t: SharedValue<number>;
 }
 
 const MARIGOLD = '#F4A51C';
 const MAROON = '#7A1C2E';
 const LEAF = '#2E6A3E';
-/** The frame shown when motion is reduced. */
-const STILL_T = 1900;
-
 // ---- small worklet helpers -------------------------------------------------
-const clamp01 = (x: number) => {
-  'worklet';
-  return Math.min(1, Math.max(0, x));
-};
-/** Progress of a step that starts at `start` and lasts `dur` ms. */
-const step = (t: number, start: number, dur: number) => {
-  'worklet';
-  return clamp01((t - start) / dur);
-};
 const easeOut = (x: number) => {
   'worklet';
   return 1 - Math.pow(1 - x, 3);
@@ -59,11 +48,6 @@ const rand = (i: number, k: number) => {
   const s = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
   return s - Math.floor(s);
 };
-
-function useTime(still: boolean) {
-  const clock = useClock();
-  return useDerivedValue(() => (still ? STILL_T : clock.value));
-}
 
 // ---- back layer ------------------------------------------------------------
 
@@ -323,8 +307,7 @@ function Sparkle({ t, i, w, h }: { t: SharedValue<number>; i: number; w: number;
   );
 }
 
-export default function SplashSkia({ layer, width: w, height: h, cx, cy, coinX, coinY, still }: SplashSkiaProps) {
-  const t = useTime(still);
+export default function SplashSkia({ layer, width: w, height: h, cx, cy, coinX, coinY, t }: SplashSkiaProps) {
   if (layer === 'front') {
     return (
       <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
