@@ -310,7 +310,7 @@ export function BootSplash({ fontsReady, appReady, onDone }: { fontsReady: boole
   useEffect(() => {
     if (mode === 'play') frames.setActive(true);
     if (mode !== 'still') return;
-    t.value = STILL_T;
+    t.set(STILL_T);
     const timer = setTimeout(() => setIntroDone(true), STILL_FOR);
     return () => clearTimeout(timer);
   }, [mode, frames, t]);

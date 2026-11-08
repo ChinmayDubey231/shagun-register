@@ -23,7 +23,7 @@ export function useSplashClock() {
   const tick = useCallback(
     (frame: FrameInfo) => {
       'worklet';
-      t.value += Math.min(frame.timeSincePreviousFrame ?? 0, MAX_STEP);
+      t.set(t.get() + Math.min(frame.timeSincePreviousFrame ?? 0, MAX_STEP));
     },
     [t],
   );
